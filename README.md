@@ -1,6 +1,6 @@
 # Channel3 Skills
 
-Official [Claude Code](https://claude.ai/code) skills from [Channel3](https://trychannel3.com) — the universal product catalog API.
+Official agent skills from [Channel3](https://trychannel3.com) — the universal product catalog API.
 
 ## Install
 
