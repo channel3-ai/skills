@@ -183,7 +183,7 @@ Each brand includes `id`, `name`, optional `description`, `logo_url`, and `best_
 
 ### 6. Websites (`GET /v0/websites`)
 
-- `client.websites.find({ query: 'amazon.com' })` — look up a retailer website
+- `client.websites.find({ query: 'nike.com' })` — look up a retailer website
 
 Returns `id`, `url`, and `best_commission_rate`. Useful for filtering search results to specific retailers.
 
@@ -267,12 +267,12 @@ const results = await client.search.perform({
 ### Filtering to Specific Retailers
 ```typescript
 // First, find the website ID
-const amazon = await client.websites.find({ query: 'amazon.com' });
+const nike = await client.websites.find({ query: 'nike.com' });
 
 // Then filter search results
 const results = await client.search.perform({
   query: 'wireless earbuds',
-  filters: { website_ids: [amazon.id] },
+  filters: { website_ids: [nike.id] },
 });
 ```
 
