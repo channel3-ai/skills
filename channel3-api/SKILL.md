@@ -12,11 +12,13 @@ You are helping a developer integrate with the Channel3 API. This guide contains
 
 ## Quick Orientation
 
-Channel3 provides a universal product catalog API. Developers use it to search products, get product details, enrich URLs, track prices, and look up brands/websites. Every product link includes affiliate tracking, so developers earn commission on sales they drive.
+Channel3 provides a universal product catalog API. Developers use it to search products, get product details, enrich URLs, track prices, and look up brands/websites. Each product can have multiple merchant offers, and every offer link includes affiliate tracking so developers earn commission on sales they drive.
 
-**Base URL:** `https://api.trychannel3.com/v0`
+**Base URL:** `https://api.trychannel3.com`
 **Auth:** `x-api-key` header (or SDK client initialization with `apiKey`)
 **Docs:** https://docs.trychannel3.com
+
+Search and product details use the `/v1` API. Enrich, price tracking, brands, and websites use `/v0`.
 
 ## Before Writing Code
 
@@ -65,7 +67,7 @@ client = AsyncChannel3(api_key=os.environ.get("CHANNEL3_API_KEY"))
 
 **curl:**
 ```bash
-curl -X POST https://api.trychannel3.com/v0/search \
+curl -X POST https://api.trychannel3.com/v1/search \
   -H "x-api-key: $CHANNEL3_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"query": "wireless headphones", "limit": 5}'
@@ -73,22 +75,23 @@ curl -X POST https://api.trychannel3.com/v0/search \
 
 ## Core Endpoints
 
-### 1. Product Search (`POST /v0/search`)
+### 1. Product Search (`POST /v1/search`)
 
-This is the primary endpoint. It supports text queries, image search (via URL or base64), and rich filtering. Returns an array of `Product` objects.
+The primary endpoint. Supports text queries, image search (via URL or base64), rich filtering, and cursor-based pagination. Returns a `SearchResponse` containing an array of `ProductDetail` objects and an optional pagination token.
 
 **Key parameters:**
 - `query` — natural language or keywords
 - `image_url` / `base64_image` — for visual search (find visually similar products)
-- `filters` — price range, brand, category, gender, age, condition, availability, website
-- `context` — personalization context (e.g., "looking for a gift for a 30-year-old who likes hiking")
+- `filters` — price range, brand, category, gender, age, condition, availability, website (plus exclusion filters)
 - `limit` — 1-30 results (default 20)
-- `config.redirect_mode` — controls affiliate link routing: `"price"` (cheapest), `"commission"` (highest commission), or `"brand"` (brand page)
+- `page_token` — cursor from a previous response's `next_page_token` to fetch the next page
 - `config.keyword_search_only` — disable semantic search, use exact keyword matching only
+
+Each product in the response has an `offers` array — one entry per merchant selling that product. Each offer includes the affiliate-tracked `url`, merchant `domain`, `price`, `availability`, and `max_commission_rate`.
 
 **Example — TypeScript:**
 ```typescript
-const products = await client.search.perform({
+const response = await client.search.perform({
   query: 'running shoes under $100',
   filters: {
     price: { max_price: 100 },
@@ -96,18 +99,20 @@ const products = await client.search.perform({
     condition: 'new',
   },
   limit: 10,
-  config: { redirect_mode: 'price' },
 });
 
-for (const product of products) {
-  console.log(`${product.title} - $${product.price.price} ${product.price.currency}`);
-  console.log(`  Buy: ${product.url}`);
+for (const product of response.products) {
+  const bestOffer = product.offers?.[0];
+  if (bestOffer) {
+    console.log(`${product.title} - $${bestOffer.price.price} ${bestOffer.price.currency}`);
+    console.log(`  Buy at ${bestOffer.domain}: ${bestOffer.url}`);
+  }
 }
 ```
 
 **Example — Python:**
 ```python
-products = client.search.perform(
+response = client.search.perform(
     query="running shoes under $100",
     filters={
         "price": {"max_price": 100},
@@ -115,17 +120,18 @@ products = client.search.perform(
         "condition": "new",
     },
     limit=10,
-    config={"redirect_mode": "price"},
 )
 
-for product in products:
-    print(f"{product.title} - ${product.price.price} {product.price.currency}")
-    print(f"  Buy: {product.url}")
+for product in response.products:
+    best_offer = product.offers[0] if product.offers else None
+    if best_offer:
+        print(f"{product.title} - ${best_offer.price.price} {best_offer.price.currency}")
+        print(f"  Buy at {best_offer.domain}: {best_offer.url}")
 ```
 
 **Example — curl:**
 ```bash
-curl -X POST https://api.trychannel3.com/v0/search \
+curl -X POST https://api.trychannel3.com/v1/search \
   -H "x-api-key: $CHANNEL3_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -135,32 +141,60 @@ curl -X POST https://api.trychannel3.com/v0/search \
       "gender": "male",
       "condition": "new"
     },
-    "limit": 10,
-    "config": {"redirect_mode": "price"}
+    "limit": 10
   }'
 ```
 
-### 2. Product Details (`GET /v0/products/{product_id}`)
+**Pagination — TypeScript:**
+```typescript
+let pageToken: string | null | undefined = undefined;
 
-Retrieve full details for a specific product by ID. Returns a `ProductDetail` object with images, variants, key features, materials, and more.
+do {
+  const response = await client.search.perform({
+    query: 'sneakers',
+    limit: 20,
+    page_token: pageToken,
+  });
+
+  for (const product of response.products) {
+    console.log(product.title);
+  }
+
+  pageToken = response.next_page_token;
+} while (pageToken);
+```
+
+### 2. Product Details (`GET /v1/products/{product_id}`)
+
+Retrieve full details for a specific product by ID. Returns a `ProductDetail` object with images, key features, materials, offers from multiple merchants, and more.
 
 **Example — TypeScript:**
 ```typescript
-const detail = await client.products.retrieve('prod_abc123', {
-  redirect_mode: 'price',
+const product = await client.products.retrieve('prod_abc123');
+console.log(product.title, product.description);
+
+for (const offer of product.offers ?? []) {
+  console.log(`  ${offer.domain}: $${offer.price.price} (${offer.availability})`);
+}
+```
+
+You can optionally pass `website_ids` to constrain which merchant offers are returned:
+```typescript
+const product = await client.products.retrieve('prod_abc123', {
+  website_ids: ['website_xyz'],
 });
-console.log(detail.title, detail.description);
-console.log('Variants:', detail.variants?.map(v => v.title));
 ```
 
 ### 3. URL Enrichment (`POST /v0/enrich`)
 
-Given a product page URL, returns structured product data from Channel3's catalog. If the product isn't already indexed, it attempts real-time extraction with basic details (price, images, title).
+Given a product page URL, returns structured product data from Channel3's catalog. If the product isn't already indexed, it attempts real-time extraction with basic details (price, images, title). The response includes both legacy flat fields and the new `offers` array.
 
 **Example — Python:**
 ```python
-detail = client.enrich.enrich_url(url="https://example.com/product/cool-sneakers")
-print(detail.title, detail.price.price)
+result = client.enrich.enrich_url(url="https://example.com/product/cool-sneakers")
+print(result.title)
+for offer in result.offers or []:
+    print(f"  {offer.domain}: ${offer.price.price}")
 ```
 
 ### 4. Price Tracking (`/v0/price-tracking/...`)
@@ -170,14 +204,15 @@ Subscribe to price changes on products, retrieve price history (up to 30 days), 
 - `client.priceTracking.start({ canonical_product_id })` — start tracking
 - `client.priceTracking.stop({ canonical_product_id })` — stop tracking
 - `client.priceTracking.getHistory(id, { days })` — get price history with statistics
-- `client.priceTracking.listSubscriptions()` — list active subscriptions
+- `client.priceTracking.listSubscriptions()` — list active subscriptions (cursor-paginated)
 
 The history response includes statistics: current price, min/max, mean, standard deviation, and a `current_status` indicator (`"low"`, `"typical"`, or `"high"`).
 
-### 5. Brands (`GET /v0/list-brands`, `GET /v0/brands`)
+### 5. Brands (`GET /v0/brands`, `GET /v0/brands/{brand_id}`, `GET /v0/list-brands`)
 
-- `client.brands.list({ limit, paging_token })` — paginated alphabetical list (1-100 per page)
+- `client.brands.list({ limit, cursor })` — cursor-paginated alphabetical list; supports `for await` iteration
 - `client.brands.find({ query: 'Nike' })` — find a brand by name
+- `client.brands.retrieve(brandId)` — get a brand by ID
 
 Each brand includes `id`, `name`, optional `description`, `logo_url`, and `best_commission_rate`.
 
@@ -196,12 +231,14 @@ Both SDKs throw typed errors. Always handle at least `AuthenticationError` (401)
 import Channel3 from '@channel3/sdk';
 
 try {
-  const products = await client.search.perform({ query: 'laptop' });
+  const response = await client.search.perform({ query: 'laptop' });
 } catch (err) {
   if (err instanceof Channel3.AuthenticationError) {
     console.error('Invalid API key');
   } else if (err instanceof Channel3.RateLimitError) {
     console.error('Rate limited — slow down or upgrade your plan');
+  } else if (err instanceof Channel3.NotFoundError) {
+    console.error('Resource not found');
   } else if (err instanceof Channel3.APIError) {
     console.error(`API error ${err.status}: ${err.message}`);
   }
@@ -213,7 +250,7 @@ try {
 from channel3_sdk import AuthenticationError, RateLimitError, APIStatusError
 
 try:
-    products = client.search.perform(query="laptop")
+    response = client.search.perform(query="laptop")
 except AuthenticationError:
     print("Invalid API key")
 except RateLimitError:
@@ -233,66 +270,79 @@ Both SDKs support:
 
 ### Image-Based Search (Visual Similarity)
 ```typescript
-// Search by image URL
-const similar = await client.search.perform({
+const response = await client.search.perform({
   image_url: 'https://example.com/photo-of-dress.jpg',
   limit: 10,
 });
 
-// Or by base64 image
-const similar = await client.search.perform({
-  base64_image: base64EncodedImageString,
-  limit: 10,
-});
+for (const product of response.products) {
+  const offer = product.offers?.[0];
+  console.log(`${product.title} — $${offer?.price.price} at ${offer?.domain}`);
+}
 ```
 
 ### Combining Text + Image Search
 ```typescript
-const results = await client.search.perform({
+const response = await client.search.perform({
   query: 'similar but in blue',
   image_url: 'https://example.com/red-jacket.jpg',
   limit: 10,
 });
 ```
 
-### Personalized Search with Context
-```typescript
-const results = await client.search.perform({
-  query: 'birthday gift',
-  context: 'Shopping for a 28-year-old woman who loves outdoor activities and sustainable brands',
-  limit: 15,
-});
-```
-
 ### Filtering to Specific Retailers
 ```typescript
-// First, find the website ID
 const nike = await client.websites.find({ query: 'nike.com' });
 
-// Then filter search results
-const results = await client.search.perform({
+const response = await client.search.perform({
   query: 'wireless earbuds',
   filters: { website_ids: [nike.id] },
 });
 ```
 
+### Excluding Brands or Websites
+```typescript
+const response = await client.search.perform({
+  query: 'running shoes',
+  filters: {
+    exclude_brand_ids: ['brand_to_skip'],
+    exclude_website_ids: ['website_to_skip'],
+  },
+});
+```
+
+### Comparing Offers Across Merchants
+```typescript
+const product = await client.products.retrieve('prod_abc123');
+
+for (const offer of product.offers ?? []) {
+  console.log(`${offer.domain}: $${offer.price.price} (commission: ${(offer.max_commission_rate ?? 0) * 100}%)`);
+}
+```
+
 ### Price Drop Monitoring
 ```typescript
-// Start tracking
 await client.priceTracking.start({
   canonical_product_id: 'prod_abc123',
 });
 
-// Check history later
 const history = await client.priceTracking.getHistory('prod_abc123', { days: 30 });
 console.log(`Current: $${history.statistics?.current_price} (${history.statistics?.current_status})`);
 console.log(`30-day range: $${history.statistics?.min_price} - $${history.statistics?.max_price}`);
 ```
 
+### Iterating All Brands
+```typescript
+for await (const brand of client.brands.list()) {
+  console.log(`${brand.name} — ${(brand.best_commission_rate ?? 0) * 100}% commission`);
+}
+```
+
 ## Important Notes
 
-- The `url` field on every product is an affiliate-tracked link. Using these links means the developer earns commission on any resulting sales — no extra setup required.
-- `redirect_mode` controls where the affiliate link points: `"price"` finds the cheapest option, `"commission"` maximizes the developer's earnings, and `"brand"` goes to the brand's own site.
+- Every product has an `offers` array. Each offer's `url` is an affiliate-tracked link — using these links earns the developer commission on resulting sales with no extra setup.
+- A single product can have offers from multiple merchants. Use `offer.domain` to identify the retailer, `offer.price` for pricing, and `offer.max_commission_rate` to understand potential earnings.
 - Image search and text search can be combined. When both `query` and `image_url`/`base64_image` are provided, the API performs a multimodal search.
 - `config.keyword_search_only` is incompatible with image search. Use it when you need exact keyword matching instead of semantic search.
-- Products have rich image metadata including `shot_type` (hero, lifestyle, on_model, etc.) and `photo_quality` (professional, ugc, poor) — useful for building polished product displays.
+- Products have rich image metadata including `shot_type` (hero, lifestyle, on_model, etc.) — useful for building polished product displays.
+- The `offers[].availability` field is simplified to `"InStock"` or `"OutOfStock"`. The full `AvailabilityStatus` enum (8 values) is available as a search filter.
