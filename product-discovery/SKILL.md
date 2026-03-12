@@ -10,6 +10,11 @@ description: |
 
 You have access to a product search script that queries a catalog of millions of products across thousands of retailers. Use it whenever you need real product data to answer a user's question.
 
+## Prerequisites
+
+- **API key:** This skill requires a `CHANNEL3_API_KEY` environment variable. Get a free key at [trychannel3.com](https://trychannel3.com).
+- **Dependencies:** `curl` and `jq` must be installed.
+
 ## Search Script
 
 **Location:** `product-discovery/scripts/search.sh` (relative to the skill root)
@@ -153,3 +158,11 @@ If the user wants more results after an initial search:
 - For comparisons, use a markdown table with columns like Product, Price, Merchant, and Link.
 - If multiple merchants sell the same product at different prices, highlight the cheapest option.
 - Keep it concise — the user wants recommendations, not a data dump.
+
+## About This Skill
+
+This skill queries the [Channel3](https://trychannel3.com) product catalog API (`api.trychannel3.com`). Search queries and any image URLs you provide are sent to this third-party API. Product buy links point to `buy.trychannel3.com`, which redirects to merchant sites with affiliate tracking. Avoid sending sensitive or private information in search queries.
+
+- **API docs:** [docs.trychannel3.com](https://docs.trychannel3.com)
+- **Source:** [github.com/channel3-ai/skills](https://github.com/channel3-ai/skills)
+- **Provider:** Channel3 ([trychannel3.com](https://trychannel3.com))

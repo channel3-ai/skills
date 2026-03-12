@@ -1,0 +1,24 @@
+name: channel3-api
+version: 1.0.0
+author: channel3
+description: >
+  Integrate with the Channel3 API to search products, enrich URLs,
+  track prices, and earn affiliate commissions across TypeScript, Python, and REST.
+  Use when building shopping features or product search integrations.
+license: MIT
+
+permissions:
+  - network
+
+config:
+  CHANNEL3_API_KEY:
+    type: string
+    required: true
+    description: "Channel3 API key — get one free at https://trychannel3.com"
+    secret: true
+
+entryPoint:
+  type: natural
+  prompt: |
+    Follow the instructions in SKILL.md to help the developer
+    integrate with the Channel3 API.

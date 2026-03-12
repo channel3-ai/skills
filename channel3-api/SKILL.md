@@ -20,6 +20,12 @@ Channel3 provides a universal product catalog API. Developers use it to search p
 
 Search and product details use the `/v1` API. Enrich, price tracking, brands, and websites use `/v0`.
 
+## Prerequisites
+
+- **API key:** Requires a `CHANNEL3_API_KEY` environment variable. Get a free key at [trychannel3.com](https://trychannel3.com).
+- **Source:** [github.com/channel3-ai/skills](https://github.com/channel3-ai/skills)
+- **API docs:** [docs.trychannel3.com](https://docs.trychannel3.com)
+
 ## Before Writing Code
 
 1. Read `references/api-reference.md` for the full endpoint and type reference — it has every parameter, type, and response shape you'll need.

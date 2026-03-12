@@ -1,0 +1,23 @@
+name: product-discovery
+version: 1.0.0
+author: channel3
+description: >
+  Search for real product data — prices, availability, and merchant links
+  across thousands of retailers — using a bundled shell script.
+  Use when finding products, comparing prices, or checking availability.
+license: MIT
+
+permissions:
+  - network
+  - shell
+
+config:
+  CHANNEL3_API_KEY:
+    type: string
+    required: true
+    description: "Channel3 API key — get one free at https://trychannel3.com"
+    secret: true
+
+entryPoint:
+  type: shell
+  path: scripts/search.sh
