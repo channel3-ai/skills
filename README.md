@@ -4,22 +4,24 @@ Official agent skills from [Channel3](https://trychannel3.com) — the universal
 
 ## Install
 
-### Any AI agent (Claude Code, Cursor, Codex, and 37+ others)
+### Cursor, Windsurf, Codex, and other coding agents
 
 ```bash
-npx skills add channel3-ai/skills
+# Install the channel3-api skill (API integration guide)
+npx skills add channel3-ai/skills --skill channel3-api
+
+# Install the product-discovery skill (agent product search)
+npx skills add channel3-ai/skills --skill product-discovery
 ```
 
-### Claude Code (CLI)
+### Claude (claude.ai)
 
-```
-/plugin marketplace add channel3-ai/skills
-/plugin install channel3-api@channel3
-```
-
-### Cowork (Desktop)
-
-Download [`channel3-api.skill`](https://github.com/channel3-ai/skills/releases/latest/download/channel3-api.skill) and drag it into the Cowork window.
+1. Download the ZIP for the skill you want:
+   - [`channel3-api.zip`](releases/channel3-api.zip) — API integration guide
+   - [`product-discovery.zip`](releases/product-discovery.zip) — Agent product search
+2. Go to **Customize > Skills** in Claude.
+3. Click the **+** button, then **Upload a skill**.
+4. Upload the ZIP file.
 
 ---
 

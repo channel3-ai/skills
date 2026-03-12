@@ -1,26 +1,27 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "channel3",
+  "description": "Product search, discovery, and API integration skills powered by Channel3",
   "owner": {
     "name": "Channel3",
     "email": "evan@trychannel3.com"
   },
-  "metadata": {
-    "description": "Official Channel3 skills for Claude — search 50M+ products, enrich URLs, track prices, and earn affiliate commission.",
-    "pluginRoot": "./"
-  },
   "plugins": [
     {
       "name": "channel3-api",
-      "source": "./channel3-api",
-      "description": "Integrate with the Channel3 API to search products, enrich URLs, track prices, and earn affiliate commissions. Covers the TypeScript SDK, Python SDK, and raw REST API.",
-      "version": "1.0.0",
-      "author": {
-        "name": "Channel3",
-        "email": "evan@trychannel3.com"
-      },
-      "homepage": "https://docs.trychannel3.com",
-      "repository": "https://github.com/channel3-ai/skills",
-      "keywords": ["channel3", "products", "shopping", "affiliate", "search", "ecommerce"]
+      "description": "Integrate with the Channel3 API to search products, enrich URLs, track prices, and earn affiliate commissions across TypeScript, Python, and REST",
+      "source": "./",
+      "strict": false,
+      "skills": ["./channel3-api"],
+      "category": "development"
+    },
+    {
+      "name": "product-discovery",
+      "description": "Search for real product data — prices, availability, and merchant links across thousands of retailers — using a bundled shell script",
+      "source": "./",
+      "strict": false,
+      "skills": ["./product-discovery"],
+      "category": "shopping"
     }
   ]
 }
