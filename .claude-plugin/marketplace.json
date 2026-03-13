@@ -12,7 +12,7 @@
       "description": "Integrate with the Channel3 API to search products, enrich URLs, track prices, and earn affiliate commissions across TypeScript, Python, and REST",
       "source": "./",
       "strict": false,
-      "skills": ["./channel3-api"],
+      "skills": ["./skills/channel3-api"],
       "category": "development"
     },
     {
@@ -20,7 +20,7 @@
       "description": "Search for real product data — prices, availability, and merchant links across thousands of retailers — using a bundled shell script",
       "source": "./",
       "strict": false,
-      "skills": ["./product-discovery"],
+      "skills": ["./skills/product-discovery"],
       "category": "shopping"
     }
   ]

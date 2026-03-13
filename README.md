@@ -14,6 +14,10 @@ npx skills add channel3-ai/skills --skill channel3-api
 npx skills add channel3-ai/skills --skill product-discovery
 ```
 
+### TanStack Intent
+
+This package is published on npm as `@channel3/skills` and indexed by the [TanStack Intent registry](https://tanstack.com/intent/registry). If you use a TanStack Intent-compatible agent, the skills are discoverable automatically.
+
 ### Claude (claude.ai)
 
 1. Download the ZIP for the skill you want:
@@ -60,7 +64,7 @@ Includes a pre-built search script with filters for price, gender, condition, ag
 
 ## Contributing
 
-To update skills, edit the relevant `SKILL.md` (and reference files if applicable), then open a PR. Skills are automatically available to users after merge.
+To update skills, edit the relevant `skills/<name>/SKILL.md` (and reference files if applicable), then open a PR. Skills are automatically available to users after merge.
 
 ## Links
 
