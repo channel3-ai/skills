@@ -1,10 +1,12 @@
 name: product-discovery
-version: 1.0.0
+version: 1.1.0
 author: channel3
 description: >
-  Search for real product data — prices, availability, and merchant links
-  across thousands of retailers — using a bundled shell script.
-  Use when finding products, comparing prices, or checking availability.
+  Search for real product data — prices, availability, merchant links, and
+  "more like this" recommendations — across thousands of retailers using bundled
+  shell scripts (search.sh, similar.sh, categories.sh, brands.sh).
+  Use when finding products, comparing prices, checking availability, or
+  resolving category slugs and brand IDs for strict filtering.
 license: MIT
 
 permissions:

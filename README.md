@@ -4,6 +4,8 @@ Official agent skills from [Channel3](https://trychannel3.com) — the universal
 
 ## Install
 
+> **Want to give your AI agent product superpowers without code?** Use the [Channel3 MCP](https://mcp.trychannel3.com/) instead — works with Cursor, Claude Code, Claude Desktop, VS Code, Codex, and any other MCP-capable host. See the [MCP install guide](https://docs.trychannel3.com/mcp-overview) for per-host snippets.
+
 ### Cursor, Windsurf, Codex, and other coding agents
 
 ```bash
@@ -33,12 +35,13 @@ This package is published on npm as `@channel3/skills` and indexed by the [TanSt
 
 ### `channel3-api`
 
-Helps AI assistants write correct integration code for the Channel3 API — product search, multi-merchant offer comparison, URL enrichment, price tracking, brand/website lookups, and affiliate monetization — across TypeScript, Python, and curl.
+Helps AI assistants write correct integration code for the Channel3 API — product search, similar-products recommendations, multi-merchant offer comparison, URL lookup, price tracking, brand/website lookups, and affiliate monetization — across TypeScript, Python, and curl.
 
 **Triggers automatically when you ask about:**
 - Searching products programmatically across multiple retailers
 - Building AI shopping agents or product recommendation features
-- Enriching product URLs with structured data (title, price, images, availability)
+- Looking up product URLs to get structured data (title, price, images, availability)
+- "More like this" / similar-products recommendations from a product ID
 - Comparing prices and offers across merchants for the same product
 - Cross-retailer price comparison or price drop monitoring
 - Earning affiliate commission on product links
@@ -49,7 +52,7 @@ Helps AI assistants write correct integration code for the Channel3 API — prod
 
 ### `product-discovery`
 
-Gives AI agents the ability to search for real product data directly — finding products, comparing prices, and checking availability across thousands of retailers. When a user asks a question that needs product data, the agent runs a bundled search script and gets back structured results it can reason over.
+Gives AI agents the ability to search for real product data directly — finding products, comparing prices, and checking availability across 100M+ products from thousands of retailers. When a user asks a question that needs product data, the agent runs a bundled search script and gets back structured results it can reason over.
 
 Includes a pre-built search script with filters for price, gender, condition, age, availability, brands, categories, and more. Supports text search, image-based visual similarity search, and pagination.
 

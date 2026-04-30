@@ -1,259 +1,138 @@
-# Channel3 API Reference
+# Channel3 API Reference (offline quick-card)
 
-Complete reference for all Channel3 API endpoints, types, and parameters.
+> **For full request/response schemas with try-it examples, see [docs.trychannel3.com/api-reference](https://docs.trychannel3.com/api-reference).** This file is a minimal offline backstop — endpoint signatures, the high-traffic `SearchFilters` / `SearchConfig` / `LocaleConfig` shapes, and compact response types.
 
-**Base URL:** `https://api.trychannel3.com`
-**Authentication:** `x-api-key` header
+**Base URL:** `https://api.trychannel3.com` · **Auth:** `x-api-key` header · `/v1` for products/brands/categories, `/v0` for price-tracking/websites.
 
-Search and product details use `/v1`. Enrich, price tracking, brands, and websites use `/v0`.
+## Contents
 
-## Table of Contents
+- Endpoint quick-cards (`/v1/search`, `/v1/similar`, `/v1/products/{id}`, `/v1/lookup`, price tracking, brands and websites, categories)
+- `SearchFilters` shape
+- `SearchConfig` and `LocaleConfig` shapes
+- Core response types (`SearchResponse`, `ProductDetail`, `ProductOffer`, `Price`, `ProductImage`, `Brand`, `Website`, `PriceHistory`, `Subscription`, `AvailabilityStatus`, `CategorySummary`, `Category`, `CategoryRef`, `CategoryAttribute`)
 
-1. [Search](#search)
-2. [Products](#products)
-3. [Enrich](#enrich)
-4. [Price Tracking](#price-tracking)
-5. [Brands](#brands)
-6. [Websites](#websites)
-7. [Shared Types](#shared-types)
+For locale codes (languages, countries, currencies) and inference rules, see SKILL.md.
 
 ---
 
-## Search
+## Endpoint quick-cards
 
 ### `POST /v1/search`
 
-Search for products using text, images, or both. Returns a paginated `SearchResponse`.
+Free-text and/or image search.
 
-**Request Body (`SearchPerformParams`):**
+- **Body:** `query?` · `image_url?` · `base64_image?` · `limit?` (default 20, max 30) · `page_token?` · `filters?: SearchFilters` · `config?: SearchConfig`
+- **Response:** `SearchResponse`
+- **SDK:** `client.products.search({...})`
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `query` | `string \| null` | No | Search query — natural language or keywords |
-| `image_url` | `string \| null` | No | URL of an image for visual similarity search |
-| `base64_image` | `string \| null` | No | Base64-encoded image for visual similarity search |
-| `limit` | `number \| null` | No | Number of results (default: 20, max: 30) |
-| `page_token` | `string \| null` | No | Cursor from a previous `next_page_token` to fetch the next page |
-| `filters` | `SearchFilters` | No | Product filters (see below) |
-| `config` | `SearchConfig` | No | Search configuration (see below) |
+### `POST /v1/similar`
 
-**`SearchFilters`:**
+"More like this" from a Channel3 `product_id` you already have. Source product is excluded.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `price` | `{ min_price?: number, max_price?: number }` | Price range in dollars |
-| `brand_ids` | `string[]` | Filter to specific brands by ID |
-| `category_ids` | `string[]` | Filter to specific categories |
-| `website_ids` | `string[]` | Filter to specific retailer websites |
-| `gender` | `"male" \| "female" \| "unisex"` | Gender filter |
-| `age` | `("newborn" \| "infant" \| "toddler" \| "kids" \| "adult")[]` | Age group filter |
-| `condition` | `"new" \| "refurbished" \| "used"` | Product condition |
-| `availability` | `AvailabilityStatus[]` | Filter by stock status |
-| `exclude_brand_ids` | `string[]` | Exclude products from these brands |
-| `exclude_website_ids` | `string[]` | Exclude products from these websites |
-| `exclude_category_ids` | `string[]` | Exclude products in these categories (or their descendants) |
-
-**`SearchConfig`:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `keyword_search_only` | `boolean` | Use exact keyword matching instead of semantic search. Incompatible with image search. |
-
-**Response:** `SearchResponse`
-
-**SDK Methods:**
-- TypeScript: `client.search.perform({ ...params })` → `SearchResponse`
-- Python sync: `client.search.perform(**params)` → `SearchResponse`
-- Python async: `await client.search.perform(**params)` → `SearchResponse`
-
----
-
-## Products
+- **Body:** `product_id` (required) · `limit?` · `page_token?` · `filters?: SearchFilters` · `config?: LocaleConfig`
+- **Response:** `SearchResponse`
+- **Errors:** `404` (product not in catalog yet — fall back to `/v1/search` by title) · `402` (credits exhausted)
+- **SDK:** `client.products.find_similar({...})`
 
 ### `GET /v1/products/{product_id}`
 
-Retrieve detailed information about a specific product.
+Full canonical product by ID.
 
-**Path Parameters:**
+- **Path:** `product_id`
+- **Query:** `website_ids?` · `language?` · `country?` · `currency?`
+- **Response:** `ProductDetail`
+- **SDK:** `client.products.retrieve(productId, {...})`
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `product_id` | `string` | Yes | The product ID |
+### `POST /v1/lookup`
 
-**Query Parameters:**
+Resolve a merchant URL to the canonical `Product`. URL-only fallback.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `website_ids` | `string[]` | No | Constrain offers to specific merchant websites |
+- **Body:** `url` (required) · `max_staleness_hours?` (default 3)
+- **Response:** `LookupResponse` (`{ product }`)
+- **Errors:** `422` (not a product page) · `500` (extraction failed) · `504` (timeout). Typical latency 2–10s uncached.
+- **SDK:** `client.products.lookup({ url, max_staleness_hours? })`
 
-**Response:** `ProductDetail`
+### Price tracking — `/v0/price-tracking/...`
 
-**SDK Methods:**
-- TypeScript: `client.products.retrieve(productId, { ...params })` → `ProductDetail`
-- Python: `client.products.retrieve(product_id, **params)` → `ProductDetail`
+- `POST /start` — body `{ canonical_product_id }` → `Subscription`
+- `POST /stop` — body `{ canonical_product_id }` → `Subscription`
+- `GET /history/{canonical_product_id}?days=` — up to 30 days → `PriceHistory`
+- `GET /subscriptions?limit&cursor` → `CursorPage<Subscription>`
+- **SDK:** `client.priceTracking.start | stop | retrieveHistory | listSubscriptions`
 
----
+### Brands and websites
 
-## Enrich
+- `GET /v1/brands?limit&cursor` → `CursorPage<Brand>` · SDK: `client.brands.list({...})`
+- `GET /v1/brands/{brand_id}` → `Brand` · SDK: `client.brands.retrieve(brandId)`
+- `GET /v1/brands/search?query&limit` → `SearchBrandsResponse` (list, ordered by relevance; `limit` 1–20, default 5) · SDK: `client.brands.search({ query, limit? })`
+- `GET /v0/websites?query=` → `Website | null` · SDK: `client.websites.retrieve({ query })`
 
-### `POST /v0/enrich`
+### Categories — `/v1/categories*`
 
-Look up a product by its URL and return structured data. If the product isn't in Channel3's database, attempts real-time extraction with basic details. The response includes both legacy flat fields and the new `offers` array.
+- `GET /v1/categories/search?query=&limit=` (`limit` 1–20, default 5) → `SearchCategoriesResponse` · SDK: `client.categories.search({ query, limit? })`
+- `GET /v1/categories?roots_only=&page=&page_size=` (`page_size` 1–100, default 20; roots first) → `PaginatedListCategoriesResponse` · SDK: `client.categories.list({ roots_only?, page?, page_size? })`
+- `GET /v1/categories/{slug}` → `Category` (404 if unknown). `slug` accepts a URL-friendly slug or an internal `category_id` · SDK: `client.categories.retrieve(slug)`
 
-**Request Body:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `url` | `string` | Yes | The product page URL to enrich |
-
-**Response:** `EnrichResponse`
-
-**SDK Methods:**
-- TypeScript: `client.enrich.enrichURL({ url })` → `EnrichEnrichURLResponse`
-- Python: `client.enrich.enrich_url(url="...")` → `EnrichEnrichURLResponse`
-
----
-
-## Price Tracking
-
-### `POST /v0/price-tracking/start`
-
-Start tracking price changes for a product.
-
-**Request Body:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `canonical_product_id` | `string` | Yes | The product ID to track |
-
-**Response:** `Subscription`
-
-### `POST /v0/price-tracking/stop`
-
-Stop tracking a product.
-
-**Request Body:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `canonical_product_id` | `string` | Yes | The product ID to stop tracking |
-
-**Response:** `Subscription`
-
-### `GET /v0/price-tracking/history/{canonical_product_id}`
-
-Get price history and statistics for a tracked product.
-
-**Path Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `canonical_product_id` | `string` | Yes | The product ID |
-
-**Query Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `days` | `number` | No | Number of days of history (max 30) |
-
-**Response:** `PriceHistory`
-
-### `GET /v0/price-tracking/subscriptions`
-
-List your active price tracking subscriptions. Cursor-paginated.
-
-**Query Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `limit` | `number` | No | Results per page |
-| `cursor` | `string` | No | Pagination cursor from previous response |
-
-**Response:** `CursorPage<Subscription>`
-
-**SDK Methods:**
-- TypeScript: `client.priceTracking.start({ canonical_product_id })`, `.stop()`, `.getHistory(id, { days })`, `.listSubscriptions()`
-- Python: `client.price_tracking.start(canonical_product_id=...)`, `.stop()`, `.get_history(id, days=...)`, `.list_subscriptions()`
-
-The `listSubscriptions()` method returns a `PagePromise` that supports `for await` iteration.
+Use the resulting `slug` values anywhere `SearchFilters.category_ids` / `exclude_category_ids` is accepted.
 
 ---
 
-## Brands
+## `SearchFilters`
 
-### `GET /v0/list-brands`
+The single most-typo'd shape in the API. Used by both `/v1/search` and `/v1/similar`.
 
-List all brands alphabetically with cursor pagination.
+| Field | Type | Description |
+|---|---|---|
+| `price` | `{ min_price?: number, max_price?: number }` | Price range in dollars |
+| `brand_ids` | `string[]` | Include only these brands (use `client.brands.search` to obtain IDs) |
+| `category_ids` | `string[]` | Include only these categories (descendants implicit). Use slugs; discover with `client.categories.search` |
+| `website_ids` | `string[]` | Include only these retailer websites |
+| `gender` | `"male" \| "female" \| "unisex"` | |
+| `age` | `("newborn" \| "infant" \| "toddler" \| "kids" \| "adult")[]` | |
+| `condition` | `"new" \| "refurbished" \| "used"` | |
+| `availability` | `AvailabilityStatus[]` | Stock status filter |
+| `exclude_brand_ids` | `string[]` | |
+| `exclude_website_ids` | `string[]` | |
+| `exclude_category_ids` | `string[]` | Excludes the category and its descendants. Slugs. |
 
-**Query Parameters:**
+## `SearchConfig`
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `limit` | `number` | No | Results per page (1-100) |
-| `cursor` | `string` | No | Cursor from previous response for next page |
+`SearchConfig` extends `LocaleConfig` with one extra field:
 
-**Response:** `CursorPage<Brand>`
+| Field | Type | Description |
+|---|---|---|
+| `keyword_search_only` | `boolean` | Exact keyword match instead of semantic; incompatible with image input. Default `false`. |
+| `language` | `LanguageCode \| null` | inherited from `LocaleConfig` |
+| `country` | `CountryCode \| null` | inherited from `LocaleConfig` |
+| `currency` | `CurrencyCode \| null` | inherited from `LocaleConfig` |
 
-### `GET /v0/brands/{brand_id}`
-
-Retrieve a brand by ID.
-
-**Path Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `brand_id` | `string` | Yes | The brand ID |
-
-**Response:** `Brand`
-
-### `GET /v0/brands`
-
-Find a specific brand by name.
-
-**Query Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `query` | `string` | Yes | Brand name to search for |
-
-**Response:** `Brand`
-
-**SDK Methods:**
-- TypeScript: `client.brands.list({ limit, cursor })`, `client.brands.retrieve(brandId)`, `client.brands.find({ query })`
-- Python: `client.brands.list(limit=..., cursor=...)`, `client.brands.retrieve(brand_id)`, `client.brands.find(query="...")`
-
-The `list()` method returns a `PagePromise` that supports `for await` iteration.
-
----
-
-## Websites
-
-### `GET /v0/websites`
-
-Find a retailer website.
-
-**Query Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `query` | `string` | Yes | Website URL or name to search for |
-
-**Response:** `Website | null`
-
-**SDK Methods:**
-- TypeScript: `client.websites.find({ query })`
-- Python: `client.websites.find(query="...")`
-
----
-
-## Shared Types
-
-### `ProductDetail`
-
-Returned by search and product retrieve endpoints. A canonical product with offers from one or more merchants.
+## `LocaleConfig`
 
 ```typescript
 {
+  language?: LanguageCode | null;
+  country?: CountryCode | null;
+  currency?: CurrencyCode | null;
+}
+```
+
+Used as `config` on `/v1/similar` and as the locale base of `SearchConfig`. For the list of supported language / country / currency codes and inference rules, see SKILL.md.
+
+---
+
+## Core types
+
+```typescript
+SearchResponse {
+  products: ProductDetail[];
+  next_page_token?: string | null;        // null when no more results
+}
+
+LookupResponse {
+  product: ProductDetail;
+}
+
+ProductDetail {
   id: string;
   title: string;
   description?: string | null;
@@ -261,49 +140,27 @@ Returned by search and product retrieve endpoints. A canonical product with offe
   images?: ProductImage[];
   categories?: string[];
   gender?: "male" | "female" | "unisex" | null;
+  age?: "newborn" | "infant" | "toddler" | "kids" | "adult" | null;
   materials?: string[] | null;
   key_features?: string[] | null;
   offers?: ProductOffer[];
 }
-```
 
-### `ProductOffer`
-
-A single merchant's offer for a product.
-
-```typescript
-{
-  url: string;                          // Affiliate-tracked buy link
-  domain: string;                       // Merchant domain, e.g. "nordstrom.com"
+ProductOffer {
+  url: string;                            // affiliate-tracked
+  domain: string;                         // e.g. "nordstrom.com"
   price: Price;
   availability: "InStock" | "OutOfStock";
-  max_commission_rate?: number;         // 0.0 = none, 0.5 = 50%
+  max_commission_rate?: number;           // fraction, 0.0–0.5 (0.05 = 5%)
 }
-```
 
-### `ProductBrand`
-
-```typescript
-{
-  id: string;
-  name: string;
+Price {
+  price: number;                          // post-discount
+  currency: string;
+  compare_at_price?: number | null;       // pre-discount
 }
-```
 
-### `Price`
-
-```typescript
-{
-  price: number;                        // Current price (after discounts)
-  currency: string;                     // e.g., "USD", "EUR", "GBP"
-  compare_at_price?: number | null;     // Original pre-discount price
-}
-```
-
-### `ProductImage`
-
-```typescript
-{
+ProductImage {
   url: string;
   alt_text?: string | null;
   is_main_image?: boolean;
@@ -311,85 +168,31 @@ A single merchant's offer for a product.
             | "angle_view" | "flat_lay" | "in_use" | "packaging" | "size_chart"
             | "product_information" | "merchant_information" | null;
 }
-```
 
-### `SearchResponse`
+ProductBrand { id: string; name: string }
 
-```typescript
-{
-  products: ProductDetail[];
-  next_page_token?: string | null;      // Null when no more results
-}
-```
-
-### `EnrichResponse`
-
-Returned by the enrich endpoint. Includes `offers` alongside legacy flat fields for backwards compatibility.
-
-```typescript
-{
-  id: string;
-  title: string;
-  description?: string | null;
-  brands?: ProductBrand[];
-  images?: EnrichImage[];
-  categories?: string[];
-  gender?: "male" | "female" | "unisex" | null;
-  materials?: string[] | null;
-  key_features?: string[] | null;
-  offers?: ProductOffer[];
-  url: string;                          // DEPRECATED — use offers[].url
-  price: Price;                         // DEPRECATED — use offers[].price
-  availability: "InStock" | "OutOfStock"; // DEPRECATED — use offers[].availability
-  brand_id?: string | null;             // DEPRECATED — use brands[]
-  brand_name?: string | null;           // DEPRECATED — use brands[]
-  image_urls?: string[];                // DEPRECATED — use images[]
-  variants?: Variant[];                 // DEPRECATED — always empty
-}
-```
-
-### `Brand`
-
-```typescript
-{
+Brand {
   id: string;
   name: string;
-  best_commission_rate?: number;        // Max commission percentage
+  best_commission_rate?: number;          // already a percentage (7.7 = 7.7%); do NOT multiply by 100
   description?: string | null;
   logo_url?: string | null;
 }
-```
 
-### `Website`
+SearchBrandsResponse {
+  brands: Brand[];                        // ordered by relevance
+}
 
-```typescript
-{
+Website {
   id: string;
   url: string;
-  best_commission_rate?: number;        // Max commission percentage
+  best_commission_rate?: number;          // already a percentage (8.39 = 8.39%); same units as Brand
 }
-```
 
-### `AvailabilityStatus`
-
-Used in search filters. Offer availability is simplified to `"InStock" | "OutOfStock"`.
-
-```typescript
-"InStock" | "LimitedAvailability" | "PreOrder" | "BackOrder"
-| "SoldOut" | "OutOfStock" | "Discontinued" | "Unknown"
-```
-
-### `PriceHistory`
-
-```typescript
-{
+PriceHistory {
   canonical_product_id: string;
   product_title?: string | null;
-  history?: Array<{
-    price: number;
-    currency: string;
-    timestamp: string;                  // ISO 8601
-  }>;
+  history?: Array<{ price: number; currency: string; timestamp: string }>;
   statistics?: {
     current_price: number;
     min_price: number;
@@ -400,14 +203,47 @@ Used in search filters. Offer availability is simplified to `"InStock" | "OutOfS
     current_status: "low" | "typical" | "high";
   } | null;
 }
-```
 
-### `Subscription`
-
-```typescript
-{
+Subscription {
   canonical_product_id: string;
-  created_at: string;                   // ISO 8601
+  created_at: string;                     // ISO 8601
   subscription_status: "active" | "cancelled";
+}
+
+AvailabilityStatus =                       // for SearchFilters.availability;
+  "InStock" | "LimitedAvailability" | "PreOrder" | "BackOrder"
+  | "SoldOut" | "OutOfStock" | "Discontinued" | "Unknown";
+// Note: ProductOffer.availability on responses is simplified to "InStock" | "OutOfStock".
+
+CategoryRef { slug: string; title: string }
+
+CategorySummary {
+  slug: string;                           // URL-friendly id, e.g. "shoes", "handbags"
+  title: string;
+  path: CategoryRef[];                    // root-to-self chain; last entry is self
+  has_children: boolean;
+}
+
+Category extends CategorySummary {
+  description?: string | null;            // natural-language category description
+  children: CategoryRef[];                // direct subcategories (one level only)
+  attributes: CategoryAttribute[];        // structured attributes for products in this category
+}
+
+CategoryAttribute {
+  slug: string;                           // e.g. "color", "frame-color"
+  name: string;                           // e.g. "Color"
+  values: string[];                       // allowed values; empty when no enumerated set
+}
+
+SearchCategoriesResponse {
+  categories: CategorySummary[];          // ordered by relevance
+}
+
+PaginatedListCategoriesResponse {
+  items: CategorySummary[];
+  page: number;                           // 1-indexed
+  page_size: number;
+  total: number;
 }
 ```
