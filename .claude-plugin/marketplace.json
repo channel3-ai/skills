@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "channel3-api",
-      "description": "Integrate with the Channel3 API to search products, enrich URLs, track prices, and earn affiliate commissions across TypeScript, Python, and REST",
+      "description": "Integrate with the Channel3 API to search products, find similar items, look up product URLs, track prices, and earn affiliate commissions across TypeScript, Python, and REST",
       "source": "./",
       "strict": false,
       "skills": ["./skills/channel3-api"],
@@ -17,7 +17,7 @@
     },
     {
       "name": "product-discovery",
-      "description": "Search for real product data — prices, availability, and merchant links across thousands of retailers — using a bundled shell script",
+      "description": "Search for real product data — prices, availability, merchant links, and 'more like this' recommendations — across thousands of retailers using bundled shell scripts",
       "source": "./",
       "strict": false,
       "skills": ["./skills/product-discovery"],

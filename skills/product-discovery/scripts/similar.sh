@@ -4,30 +4,31 @@ set -euo pipefail
 # ── Parse arguments ───────────────────────────────────────────────────
 
 LIMIT=5
+PRODUCT_ID=""
 MIN_PRICE=""
 MAX_PRICE=""
 GENDER=""
 CONDITION=""
 AGE=""
 AVAILABILITY=""
-IMAGE_URL=""
 BRAND_IDS=""
 WEBSITE_IDS=""
 CATEGORY_IDS=""
 EXCLUDE_BRAND_IDS=""
 EXCLUDE_WEBSITE_IDS=""
 EXCLUDE_CATEGORY_IDS=""
-KEYWORD_ONLY=false
 COUNTRY=""
 CURRENCY=""
 LANGUAGE=""
 PAGE_TOKEN=""
-QUERY=""
 
 usage() {
-  echo "Usage: search.sh [OPTIONS] \"query text\""
+  echo "Usage: similar.sh --id PRODUCT_ID [OPTIONS]"
+  echo ""
+  echo "Find products similar to a given canonical product."
   echo ""
   echo "Options:"
+  echo "  --id PRODUCT_ID         Canonical product ID to find similar products for (required)"
   echo "  -n NUM                  Number of results (default: 5, max: 30)"
   echo "  -p MAX_PRICE            Maximum price in dollars"
   echo "  --min-price MIN         Minimum price in dollars"
@@ -35,18 +36,16 @@ usage() {
   echo "  -c CONDITION            Condition (new/refurbished/used)"
   echo "  -a AGE                  Comma-separated age groups (newborn/infant/toddler/kids/adult)"
   echo "  --availability STATUS   Comma-separated statuses (InStock/OutOfStock/PreOrder/BackOrder/...)"
-  echo "  -i IMAGE_URL            Search by image URL (visual similarity)"
   echo "  -b BRAND_IDS            Comma-separated brand IDs to include"
   echo "  -w WEBSITE_IDS          Comma-separated website IDs to include"
   echo "  --categories SLUGS      Comma-separated category slugs to include"
   echo "  --exclude-brands IDS    Comma-separated brand IDs to exclude"
   echo "  --exclude-websites IDS  Comma-separated website IDs to exclude"
   echo "  --exclude-categories SLUGS Comma-separated category slugs to exclude"
-  echo "  --keyword-only          Exact keyword matching (no semantic search)"
   echo "  --country CODE          ISO 3166-1 alpha-2 country code (e.g. GB, DE)"
   echo "  --currency CODE         ISO 4217 currency code (e.g. GBP, EUR)"
   echo "  --language CODE         ISO 639-1 language code (e.g. en, de)"
-  echo "  --next TOKEN            Pagination token from a previous search"
+  echo "  --next TOKEN            Pagination token from a previous response"
   echo "  -h                      Show this help"
   exit "${1:-0}"
 }
@@ -66,6 +65,7 @@ fi
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --id) PRODUCT_ID="$2"; shift 2 ;;
     -n) LIMIT="$2"; shift 2 ;;
     -p) MAX_PRICE="$2"; shift 2 ;;
     --min-price) MIN_PRICE="$2"; shift 2 ;;
@@ -73,26 +73,24 @@ while [[ $# -gt 0 ]]; do
     -c) CONDITION="$2"; shift 2 ;;
     -a) AGE="$2"; shift 2 ;;
     --availability) AVAILABILITY="$2"; shift 2 ;;
-    -i) IMAGE_URL="$2"; shift 2 ;;
     -b) BRAND_IDS="$2"; shift 2 ;;
     -w) WEBSITE_IDS="$2"; shift 2 ;;
     --categories) CATEGORY_IDS="$2"; shift 2 ;;
     --exclude-brands) EXCLUDE_BRAND_IDS="$2"; shift 2 ;;
     --exclude-websites) EXCLUDE_WEBSITE_IDS="$2"; shift 2 ;;
     --exclude-categories) EXCLUDE_CATEGORY_IDS="$2"; shift 2 ;;
-    --keyword-only) KEYWORD_ONLY=true; shift ;;
     --country) COUNTRY="$2"; shift 2 ;;
     --currency) CURRENCY="$2"; shift 2 ;;
     --language) LANGUAGE="$2"; shift 2 ;;
     --next) PAGE_TOKEN="$2"; shift 2 ;;
     -h|--help) usage ;;
     -*) echo "Unknown option: $1"; usage 1 ;;
-    *) QUERY="$1"; shift ;;
+    *) echo "Unexpected positional argument: $1"; usage 1 ;;
   esac
 done
 
-if [ -z "$QUERY" ] && [ -z "$IMAGE_URL" ]; then
-  echo "ERROR: Provide a search query and/or an image URL (-i)."
+if [ -z "$PRODUCT_ID" ]; then
+  echo "ERROR: --id PRODUCT_ID is required."
   echo ""
   usage 1
 fi
@@ -101,15 +99,8 @@ fi
 
 build_body() {
   local body="{}"
+  body=$(echo "$body" | jq --arg id "$PRODUCT_ID" '.product_id = $id')
   body=$(echo "$body" | jq --argjson limit "$LIMIT" '.limit = $limit')
-
-  if [ -n "$QUERY" ]; then
-    body=$(echo "$body" | jq --arg q "$QUERY" '.query = $q')
-  fi
-
-  if [ -n "$IMAGE_URL" ]; then
-    body=$(echo "$body" | jq --arg u "$IMAGE_URL" '.image_url = $u')
-  fi
 
   if [ -n "$PAGE_TOKEN" ]; then
     body=$(echo "$body" | jq --arg t "$PAGE_TOKEN" '.page_token = $t')
@@ -117,11 +108,6 @@ build_body() {
 
   local config="{}"
   local has_config=false
-
-  if [ "$KEYWORD_ONLY" = true ]; then
-    config=$(echo "$config" | jq '.keyword_search_only = true')
-    has_config=true
-  fi
 
   if [ -n "$COUNTRY" ]; then
     config=$(echo "$config" | jq --arg c "$COUNTRY" '.country = $c')
@@ -142,7 +128,6 @@ build_body() {
     body=$(echo "$body" | jq --argjson c "$config" '.config = $c')
   fi
 
-  # Build filters object
   local filters="{}"
   local has_filters=false
 
@@ -236,7 +221,7 @@ BODY=$(build_body)
 # ── Call the API ──────────────────────────────────────────────────────
 
 RESPONSE=$(curl -s -w "\n%{http_code}" \
-  -X POST "https://api.trychannel3.com/v1/search" \
+  -X POST "https://api.trychannel3.com/v1/similar" \
   -H "x-api-key: ${CHANNEL3_API_KEY:-}" \
   -H "Content-Type: application/json" \
   -d "$BODY")
@@ -255,7 +240,16 @@ fi
 if [ "$HTTP_CODE" -eq 402 ]; then
   echo "ERROR: Free credits exhausted."
   echo ""
-  echo "Add a payment method at https://trychannel3.com to continue searching."
+  echo "Add a payment method at https://trychannel3.com to continue."
+  exit 1
+fi
+
+if [ "$HTTP_CODE" -eq 404 ]; then
+  detail=$(echo "$RESPONSE_BODY" | jq -r '.detail // "Product not found"' 2>/dev/null || echo "Product not found")
+  echo "ERROR: $detail"
+  echo ""
+  echo "Tip: this product may not be in the Channel3 catalog yet. Fall back to"
+  echo "search.sh with the product's title or category."
   exit 1
 fi
 
@@ -272,14 +266,14 @@ PRODUCT_COUNT=$(echo "$RESPONSE_BODY" | jq '.products | length')
 NEXT_PAGE=$(echo "$RESPONSE_BODY" | jq -r '.next_page_token // empty')
 
 if [ "$PRODUCT_COUNT" -eq 0 ]; then
-  echo "No products found."
+  echo "No similar products found."
   exit 0
 fi
 
 if [ -n "$NEXT_PAGE" ]; then
-  echo "Found $PRODUCT_COUNT products (next_page: $NEXT_PAGE)"
+  echo "Found $PRODUCT_COUNT similar products (next_page: $NEXT_PAGE)"
 else
-  echo "Found $PRODUCT_COUNT products"
+  echo "Found $PRODUCT_COUNT similar products"
 fi
 echo ""
 
