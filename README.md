@@ -16,6 +16,16 @@ npx skills add channel3-ai/skills --skill channel3-api
 npx skills add channel3-ai/skills --skill product-discovery
 ```
 
+The `product-discovery` skill calls the Channel3 CLI. Install it once:
+
+```bash
+brew install channel3-ai/tap/channel3
+# or, on systems without brew:
+go install github.com/channel3-ai/cli/cmd/channel3@latest
+
+export CHANNEL3_API_KEY="..."   # free key at https://trychannel3.com
+```
+
 ### TanStack Intent
 
 This package is published on npm as `@channel3/skills` and indexed by the [TanStack Intent registry](https://tanstack.com/intent/registry). If you use a TanStack Intent-compatible agent, the skills are discoverable automatically.
@@ -24,7 +34,7 @@ This package is published on npm as `@channel3/skills` and indexed by the [TanSt
 
 1. Download the ZIP for the skill you want:
    - [`channel3-api.zip`](releases/channel3-api.zip) — API integration guide
-   - [`product-discovery.zip`](releases/product-discovery.zip) — Agent product search
+   - [`product-discovery.zip`](releases/product-discovery.zip) — Agent product search (requires the [Channel3 CLI](https://docs.trychannel3.com/cli); see install above)
 2. Go to **Customize > Skills** in Claude.
 3. Click the **+** button, then **Upload a skill**.
 4. Upload the ZIP file.
@@ -52,9 +62,9 @@ Helps AI assistants write correct integration code for the Channel3 API — prod
 
 ### `product-discovery`
 
-Gives AI agents the ability to search for real product data directly — finding products, comparing prices, and checking availability across 100M+ products from thousands of retailers. When a user asks a question that needs product data, the agent runs a bundled search script and gets back structured results it can reason over.
+Gives AI agents the ability to search for real product data directly — finding products, comparing prices, and checking availability across 100M+ products from thousands of retailers. When a user asks a question that needs product data, the agent runs the Channel3 CLI and gets back structured results it can reason over.
 
-Includes a pre-built search script with filters for price, gender, condition, age, availability, brands, categories, and more. Supports text search, image-based visual similarity search, and pagination.
+Drives the [Channel3 CLI](https://docs.trychannel3.com/cli) with filters for price, gender, condition, age, availability, brands, categories, structured attributes, and image-palette colors. Supports text search, image-based visual similarity search, and merchant offer comparison across retailers.
 
 **Triggers automatically when you ask:**
 - "Find me running shoes under $100"

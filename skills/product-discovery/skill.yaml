@@ -1,12 +1,14 @@
 name: product-discovery
-version: 1.1.0
+version: 2.0.0
 author: channel3
 description: >
   Search for real product data — prices, availability, merchant links, and
-  "more like this" recommendations — across thousands of retailers using bundled
-  shell scripts (search.sh, similar.sh, categories.sh, brands.sh).
-  Use when finding products, comparing prices, checking availability, or
-  resolving category slugs and brand IDs for strict filtering.
+  "more like this" recommendations — across 100M+ products from thousands of
+  retailers using the Channel3 CLI (channel3 products search,
+  channel3 products find-similar, channel3 categories search,
+  channel3 categories retrieve, channel3 brands search). Use when finding
+  products, comparing prices, checking availability, or resolving category
+  slugs and brand IDs for strict filtering.
 license: MIT
 
 permissions:
@@ -21,5 +23,8 @@ config:
     secret: true
 
 entryPoint:
-  type: shell
-  path: scripts/search.sh
+  type: natural
+  prompt: |
+    Follow the instructions in SKILL.md to help the user discover products
+    using the Channel3 CLI (`channel3`). Install with
+    `brew install channel3-ai/tap/channel3` if not present.
