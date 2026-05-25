@@ -7,9 +7,10 @@
 ## Contents
 
 - Endpoint quick-cards (`/v1/search`, `/v1/similar`, `/v1/products/{id}`, `/v1/lookup`, price tracking, brands and websites, categories)
-- `SearchFilters` shape
+- `SearchFilters` shape (including `attributes` and `colors`)
 - `SearchConfig` and `LocaleConfig` shapes
-- Core response types (`SearchResponse`, `ProductDetail`, `ProductOffer`, `Price`, `ProductImage`, `Brand`, `Website`, `PriceHistory`, `Subscription`, `AvailabilityStatus`, `CategorySummary`, `Category`, `CategoryRef`, `CategoryAttribute`)
+- Core response types (`SearchResponse`, `ProductDetail`, `ProductOffer`, `Price`, `ProductImage`, `Variants`, `VariantOption`, `OptionValue`, `SelectedOption`, `Brand`, `Website`, `PriceHistory`, `Subscription`, `AvailabilityStatus`, `CategorySummary`, `Category`, `CategoryRef`, `CategoryAttribute`)
+- Color filter helpers (`SearchColorsFilter`, `SearchFilterColor`)
 
 For locale codes (languages, countries, currencies) and inference rules, see SKILL.md.
 
@@ -31,17 +32,17 @@ Free-text and/or image search.
 
 - **Body:** `product_id` (required) · `limit?` · `page_token?` · `filters?: SearchFilters` · `config?: LocaleConfig`
 - **Response:** `SearchResponse`
-- **Errors:** `404` (product not in catalog yet — fall back to `/v1/search` by title) · `402` (credits exhausted)
+- **Errors:** `404` (product not in catalog yet — fall back to `/v1/search` by title)
 - **SDK:** `client.products.find_similar({...})`
 
 ### `GET /v1/products/{product_id}`
 
-Full canonical product by ID.
+Full canonical product by ID, including hydrated `variants` and `structured_attributes`.
 
 - **Path:** `product_id`
-- **Query:** `website_ids?` · `language?` · `country?` · `currency?`
+- **Query:** `website_ids?` · `language?` · `country?` · `currency?` · `option_<name>=<label>` (repeatable; selects a variant configuration, e.g. `option_Color=Blue&option_Size=XL`)
 - **Response:** `ProductDetail`
-- **SDK:** `client.products.retrieve(productId, {...})`
+- **SDK:** `client.products.retrieve(productId, {...})` — pass `option_*` through the SDK's extra-query mechanism
 
 ### `POST /v1/lookup`
 
@@ -87,10 +88,12 @@ The single most-typo'd shape in the API. Used by both `/v1/search` and `/v1/simi
 | `brand_ids` | `string[]` | Include only these brands (use `client.brands.search` to obtain IDs) |
 | `category_ids` | `string[]` | Include only these categories (descendants implicit). Use slugs; discover with `client.categories.search` |
 | `website_ids` | `string[]` | Include only these retailer websites |
-| `gender` | `"male" \| "female" \| "unisex"` | |
+| `gender` | `"male" \| "female"` | |
 | `age` | `("newborn" \| "infant" \| "toddler" \| "kids" \| "adult")[]` | |
 | `condition` | `"new" \| "refurbished" \| "used"` | |
 | `availability` | `AvailabilityStatus[]` | Stock status filter |
+| `attributes` | `Record<string, string[]>` | Non-color extracted attribute constraints (e.g. `material`, `frame-color`). Values OR within a key, AND across keys. Discover keys/values via `Category.attributes`. **Do not use for color** — use `colors` instead. |
+| `colors` | `SearchColorsFilter` | Color filter: required sRGB palette in the product image (AND across entries). Map color names to `#rrggbb` hex. |
 | `exclude_brand_ids` | `string[]` | |
 | `exclude_website_ids` | `string[]` | |
 | `exclude_category_ids` | `string[]` | Excludes the category and its descendants. Slugs. |
@@ -138,12 +141,42 @@ ProductDetail {
   description?: string | null;
   brands?: ProductBrand[];
   images?: ProductImage[];
-  categories?: string[];
-  gender?: "male" | "female" | "unisex" | null;
+  categories?: string[];                  // category slugs
+  gender?: "male" | "female" | "unisex" | null;  // response value; SearchFilters.gender accepts "male" | "female" only
   age?: "newborn" | "infant" | "toddler" | "kids" | "adult" | null;
   materials?: string[] | null;
   key_features?: string[] | null;
   offers?: ProductOffer[];
+  variants?: Variants | null;             // null when the product has no variations
+  structured_attributes: Record<string, string[]>;
+                                          // e.g. { color: ["Navy"], material: ["Leather"] }
+                                          // values come from the category's CategoryAttribute.values
+}
+
+Variants {
+  options: VariantOption[];               // every dimension available on this product family
+  selected: SelectedOption[];             // currently resolved configuration on this response
+}
+
+VariantOption {
+  name: string;                           // e.g. "Color", "Size"
+  values: OptionValue[];
+}
+
+OptionValue {
+  label: string;                          // e.g. "Blue", "XL"
+  exists: boolean;                        // false when the value is present on a sibling variant
+                                          // but not this configuration (e.g. XL only in Red)
+  available?: AvailabilityStatus | null;  // hydrated on GET /v1/products/{id}; null on search results
+  thumbnail_url?: string | null;          // e.g. color swatch image
+  product_id?: string | null;             // set when this value resolves to a different product
+                                          // (color-as-product-swap setups)
+}
+
+SelectedOption {
+  name: string;                           // dimension name, matches VariantOption.name
+  label: string;                          // resolved value; diff against requested option_<name> to
+                                          // detect server-side relaxation
 }
 
 ProductOffer {
@@ -152,6 +185,15 @@ ProductOffer {
   price: Price;
   availability: "InStock" | "OutOfStock";
   max_commission_rate?: number;           // fraction, 0.0–0.5 (0.05 = 5%)
+}
+
+SearchColorsFilter {
+  palette: SearchFilterColor[];           // AND across entries — product must match all
+}
+
+SearchFilterColor {
+  hex: string;                            // sRGB, e.g. "#1a2b3c"
+  percentage?: number | null;             // 0–1; optional minimum share of this color in the image
 }
 
 Price {

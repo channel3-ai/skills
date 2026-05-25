@@ -13,9 +13,12 @@ Channel3 is a universal product catalog API. Pick the endpoint(s) that match the
 | Free-text query, image URL, or both | `POST /v1/search` |
 | Channel3 `product_id` and wants similar items | `POST /v1/similar` |
 | Channel3 `product_id` and wants full details | `GET /v1/products/{id}` |
+| A `product_id` and a variant choice (color/size/...) and wants the matching offers | `GET /v1/products/{id}` with `option_<name>=<label>` query params |
 | A merchant URL and wants the canonical product | `POST /v1/lookup` |
 | A `product_id` and wants price-change alerts | `POST /v0/price-tracking/start` |
 | A free-text term and wants matching category slugs | `GET /v1/categories/search` |
+| A color constraint (blue, navy, red, ...) | `filters.colors` on `POST /v1/search` or `POST /v1/similar` — map color names to sRGB hex; **never** `filters.attributes.color` |
+| Non-color structured attributes (material, frame-color, ...) | `filters.attributes` on `POST /v1/search` or `POST /v1/similar` — discover handles/values via `Category.attributes` (skip the `color` handle) |
 
 **Base URL:** `https://api.trychannel3.com`  
 **Auth:** `x-api-key` header  
@@ -46,6 +49,21 @@ const { products } = await client.products.search({ query: 'running shoes', limi
 
 Locale defaults can be set client-wide via constructor (`new Channel3({ country: 'GB', currency: 'GBP' })`) or `CHANNEL3_LANGUAGE` / `CHANNEL3_COUNTRY` / `CHANNEL3_CURRENCY` env vars; per-call `config.country` / `config.currency` / `config.language` always wins. For async clients, error classes, retries, timeouts, and logging, see [docs.trychannel3.com/sdk](https://docs.trychannel3.com/sdk).
 
+### CLI (terminal & testing)
+
+For ad-hoc API exploration from a terminal — sanity-checking a filter shape, grabbing a `product_id` to feed into integration tests, or one-off calls without a project — use the [Channel3 CLI](https://docs.trychannel3.com/cli). It tracks the API spec automatically.
+
+```bash
+brew install channel3-ai/tap/channel3   # or: go install github.com/channel3-ai/cli/cmd/channel3@latest
+export CHANNEL3_API_KEY="..."
+
+channel3 products search --query "running shoes" --max-items 5 \
+  --filters '{"price":{"max_price":100},"gender":"male"}' \
+  --format jsonl --transform '{id,title,offers:offers.#.{domain,price:price.price,url}}'
+```
+
+Use the SDK for production code. The CLI is for terminal work.
+
 ## Endpoints
 
 ### Search — `POST /v1/search`
@@ -69,6 +87,32 @@ response = client.products.search(
 ```
 
 Per-call locale override: `config: { country: 'GB', currency: 'GBP' }`. Pure keyword matching (skip semantic search): `config: { keyword_search_only: true }` — incompatible with image input. Full filter shape in `references/api-reference.md`; full per-endpoint schema at [docs.trychannel3.com/api-reference](https://docs.trychannel3.com/api-reference).
+
+#### Structured attribute and color filters
+
+**Color constraints use `filters.colors`, not `filters.attributes`.** Map color words (navy, blue, red, ...) to sRGB hex. `filters.attributes` is for non-color handles only (material, frame-color, ...).
+
+```typescript
+const response = await client.products.search({
+  query: 'leather sofa',
+  filters: {
+    category_ids: ['sofas'],
+    attributes: { material: ['Leather'] },
+    colors: {
+      palette: [
+        { hex: '#001f3f' }, // navy — use colors for any color intent
+        { hex: '#ffffff', percentage: 0.3 },
+      ],
+    },
+  },
+  limit: 10,
+});
+```
+
+- **`colors.palette`** — products must contain every listed color (AND). `hex` is sRGB (`#rrggbb`); `percentage` (0–1) is an optional minimum share of that color in the product image.
+- **`attributes`** — `Record<string, string[]>`. Keys are non-color attribute handles (e.g. `material`, `frame-color`); values are OR within a key, AND across keys. Discover valid handles and values for a category via `client.categories.retrieve(slug)` → `Category.attributes`. Do **not** pass the `color` handle here — use `filters.colors` instead. When a category filter is also supplied, every attribute key must be valid for at least one of those categories.
+
+Don't guess attribute handles or values — `categories.retrieve` is the source of truth for non-color attributes. Returned products carry `structured_attributes` (e.g. `{ color: ["Navy"], material: ["Leather"] }`) for display; filter color via `filters.colors`, not by echoing `structured_attributes.color` into `filters.attributes`.
 
 For raw HTTP / non-SDK callers:
 
@@ -105,7 +149,7 @@ similar = client.products.find_similar(
 )
 ```
 
-Filters are recommended to keep results in the same slice (gender, brand, category, price). Returns `404` if the product isn't in the catalog yet — fall back to `/v1/search` by title.
+Filters are recommended to keep results in the same slice (gender, brand, category, price). For "more like this, but in navy", use `filters.colors` (e.g. `{ hex: '#001f3f' }`), not `filters.attributes.color`. Non-color attributes use `filters.attributes`. Returns `404` if the product isn't in the catalog yet — fall back to `/v1/search` by title.
 
 ### Lookup — `POST /v1/lookup`
 
@@ -126,7 +170,7 @@ Latency: typically 2–10 seconds for uncached URLs (real-time extraction), sub-
 
 ### Product Details — `GET /v1/products/{product_id}`
 
-Full `ProductDetail` for a known `product_id`.
+Full `ProductDetail` for a known `product_id`. Same response shape as search results, but with `variants` fully hydrated for the current selection — including per-option-value availability and thumbnails.
 
 ```typescript
 const product = await client.products.retrieve('prod_abc123', {
@@ -136,6 +180,24 @@ const product = await client.products.retrieve('prod_abc123', {
 ```
 
 Python is the same shape: `client.products.retrieve("prod_abc123", country="GB", currency="GBP")`. Optional query params: `website_ids`, `language`, `country`, `currency`. Returns `404` when the product has no merchant offer in the requested locale — seed `product_id` from a `/v1/search` call run under the same locale, or omit the locale to fall back to default.
+
+#### Variants and `option_<name>` query params
+
+A `ProductDetail` with variations carries:
+
+- **`variants.options`** — every dimension (e.g. `Color`, `Size`) and its `values` (`label`, `exists`, `available`, optional `thumbnail_url` and `product_id` for color-as-product-swap setups).
+- **`variants.selected`** — the dimensions currently resolved on this response (`[{ name: "Color", label: "Navy" }, ...]`).
+- **`structured_attributes`** — extracted attribute values for the resolved variant (e.g. `{ color: ["Navy"], material: ["Leather"] }`).
+
+To re-fetch the product under a different variant configuration, append `option_<DimensionName>=<Label>` query params. Multiple dimensions can be combined; case is preserved on the name and matched case-insensitively against the product family.
+
+```bash
+curl -X GET \
+  "https://api.trychannel3.com/v1/products/prod_abc123?option_Color=Blue&option_Size=XL" \
+  -H "x-api-key: $CHANNEL3_API_KEY"
+```
+
+From the SDKs, pass `option_*` through the client's extra-query mechanism — see [docs.trychannel3.com/sdk](https://docs.trychannel3.com/sdk) for the exact parameter name in each language. The server returns the same `ProductDetail` shape with `variants.selected` updated to reflect the resolved configuration. Diff your requested options against `variants.selected` to detect server-side relaxation (e.g. the requested size was unavailable in the requested color).
 
 ### Price Tracking — `/v0/price-tracking/...`
 
@@ -167,7 +229,7 @@ const brandId = brands[0]?.id;  // top match — inspect `brands` to disambiguat
 
 ### Categories — `/v1/categories*`
 
-Discover the category slugs you can pass to `SearchFilters.category_ids` / `exclude_category_ids`. Slugs are stable URL-friendly identifiers (e.g. `shoes`, `sofas`, `handbags`) — prefer them over internal IDs. The taxonomy doesn't have a leaf for every conceivable subcategory, and unknown slugs are silently dropped, so always discover real slugs with `client.categories.search` rather than guessing.
+Discover the category slugs you can pass to `SearchFilters.category_ids` / `exclude_category_ids`, and the attribute keys/values you can pass to `SearchFilters.attributes`. Slugs are stable URL-friendly identifiers (e.g. `shoes`, `sofas`, `handbags`) — prefer them over internal IDs. The taxonomy doesn't have a leaf for every conceivable subcategory, and unknown slugs are silently dropped, so always discover real slugs with `client.categories.search` rather than guessing.
 
 - `client.categories.search({ query, limit? })` — free-text → `CategorySummary[]` (`limit` 1–20, default 5)
 - `client.categories.list({ roots_only?, page?, page_size? })` — paginated browse, roots first (`page_size` 1–100, default 20)
@@ -195,6 +257,23 @@ response = client.products.search(
 
 `exclude_category_ids` excludes the category and all its descendants.
 
+`Category.attributes` lists indexed attribute handles for `SearchFilters.attributes`. Use non-color slugs (e.g. `material`, `frame-color`). The `color` entry is informational on products — **filter color with `filters.colors`**, not `attributes.color`.
+
+```typescript
+const category = await client.categories.retrieve('sofas');
+const materialAttr = category.attributes.find(a => a.slug === 'material');
+//   materialAttr?.values → ["Leather", "Velvet", "Linen", ...]
+
+const { products } = await client.products.search({
+  query: 'leather sectional',
+  filters: {
+    category_ids: ['sofas'],
+    attributes: { material: ['Leather'] },
+    colors: { palette: [{ hex: '#001f3f' }] }, // navy via colors filter
+  },
+});
+```
+
 ## Affiliate links
 
 Every `ProductOffer.url` in a response is an affiliate-tracked link. Surface them as the buy buttons in any UI — sales driven through these URLs earn commission with no additional setup. Use `offer.domain` to identify the retailer and `offer.max_commission_rate` to compare earning potential across merchants.
@@ -209,7 +288,7 @@ When `country` is set alone, the server infers `currency` (`GB → GBP`) and `la
 
 ## When to use the MCP instead
 
-If the goal is to give an existing AI agent product superpowers without writing code, the Channel3 MCP (`https://mcp.trychannel3.com/`, free tier, append `?apiKey=<key>` for pay-as-you-go) is lower friction — see [docs.trychannel3.com/mcp-overview](https://docs.trychannel3.com/mcp-overview).
+For no-code agent integration, use the [Channel3 MCP](https://docs.trychannel3.com/mcp-overview) instead of writing API code when the host already supports it.
 
 ## When stuck
 
