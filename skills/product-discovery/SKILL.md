@@ -18,7 +18,7 @@ Uses the [Channel3 CLI](https://docs.trychannel3.com/cli) to query a catalog of 
 | See a category's allowed attribute keys/values for `filters.attributes` | `channel3 categories retrieve --slug <slug>` |
 | Filter by a color (blue, navy, red, ...) | `--filters '{"colors":{"palette":[{"hex":"#..."}]}}'` (sRGB hex; **never** put color into `filters.attributes`) |
 | Filter by non-color attributes (material, frame-color, ...) | `channel3 categories retrieve --slug <slug>` first, then `--filters '{"attributes":{"handle":["Value"]}}'` |
-| See variant options for a specific product | `channel3 products retrieve --product-id <ID>` (read `variants.options` / `variants.selected`) |
+| See variant options + live stock for a product | `channel3 products retrieve --product-id <ID>` (read `variants.options` / `variants.selected`) — see Pattern 6 |
 | Find a brand ID to use as a filter | `channel3 brands search --query "<name>" --limit 5` |
 | Wire Channel3 into their agent host directly (no CLI) | Channel3 MCP — see below |
 
@@ -185,6 +185,26 @@ If a search returns zero or clearly off-intent results, run another search with 
 - **Need more results** of the same shape → re-run with a larger `--max-items`.
 
 Stop once results are presentable — don't keep searching hoping for "better." **Never validate hits by retrieving images, downloading CDN assets, or running `find-similar` to double-check** — the filters and `attrs`/`title` are the source of truth, and the host UI will render the image for the user.
+
+### 6. Inspect a product's variants and live stock
+
+User: "does this come in XL?" / "what colors does it come in?" / "is the navy one in stock?"
+
+`products search` returns the variant matrix but **not** stock — `available` is always null on search results. To see live per-value availability, retrieve the product:
+
+```bash
+channel3 products retrieve --product-id <ID> --format jsonl \
+  --transform '{title,variants:variants.{selected,options:options.#.{name,values:values.#.{label,exists,available,product_id}}}}'
+```
+
+Read the rows:
+
+- **`exists: false`** → that value isn't offered with the currently selected options (e.g. the shirt exists in XL, but not in *this color* + XL). Not the same as out of stock.
+- **`available`** → live stock (`InStock`, `OutOfStock`, `SoldOut`, …), hydrated only on retrieve.
+- **`product_id` set** → that value is a **separate product** (color-as-product-swap). To inspect it, `retrieve` that ID instead.
+- **`variants.selected`** → the configuration this response represents.
+
+Retrieve is free, so refetch before telling the user about price/stock for a specific configuration. The CLI's `retrieve` doesn't take `option_*` selection params — resolving an arbitrary size+color combination server-side is an SDK/REST capability (see the `channel3-api` skill). For navigation, follow a value's `product_id`.
 
 ## Filter cookbook
 

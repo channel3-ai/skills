@@ -38,6 +38,8 @@ npm install @channel3/sdk           # TypeScript
 pip install channel3_sdk            # Python
 ```
 
+A Go SDK is also available — see [docs.trychannel3.com/sdk](https://docs.trychannel3.com/sdk).
+
 Set `CHANNEL3_API_KEY` in the environment (free key at [trychannel3.com](https://trychannel3.com)). Then the minimum end-to-end call:
 
 ```typescript
@@ -63,6 +65,18 @@ channel3 products search --query "running shoes" --max-items 5 \
 ```
 
 Use the SDK for production code. The CLI is for terminal work.
+
+### UI components (React)
+
+[Channel3 UI](https://github.com/channel3-ai/channel3-ui) is a source-available React component library, distributed as a [shadcn registry](https://ui.trychannel3.com) and typed directly against `@channel3/sdk` — a `ProductDetail` from a search or product fetch drops straight in.
+
+```bash
+npx shadcn@latest add https://ui.trychannel3.com/r/all.json
+```
+
+- **Blocks** — `product-search` (search bar + faceted filters + infinite-scroll grid) and `product-details` (full PDP: gallery, variant selection, offer comparison, price history, recommendations).
+- **À la carte** — components (`product-card`, `variant-selector`, `offers-list`, `image-gallery`, …) and hooks (`useProductSearch`, `useVariantSelection`, `useProductRecommendations`, …).
+- **Presentational by design** — components take Channel3 data as props and emit intent through callbacks; they never call the API or touch your key. Fetch and shape data on your server (where `CHANNEL3_API_KEY` lives), then pass results in.
 
 ## Endpoints
 
@@ -166,7 +180,7 @@ result = client.products.lookup(url="https://merchant.com/products/red-jacket")
 product = result.product
 ```
 
-Latency: typically 2–10 seconds for uncached URLs (real-time extraction), sub-second for cached. Returns `422` for non-product pages (category listings, search results, homepages) and `504` on timeout. `max_staleness_hours` (default 3) bounds cache freshness. Once you have `product.id`, use it with `client.products.retrieve()` or `client.products.find_similar()`.
+Latency: typically 2–10 seconds for uncached URLs (real-time extraction), sub-second for cached. Returns `422` for non-product pages (category listings, search results, homepages) and `504` on timeout. `max_staleness_hours` (default 3) bounds cache freshness. The response carries the same hydrated `variants` and `structured_attributes` as `GET /v1/products/{id}`. Once you have `product.id`, use it with `client.products.retrieve()` or `client.products.find_similar()`.
 
 ### Product Details — `GET /v1/products/{product_id}`
 
@@ -198,6 +212,8 @@ curl -X GET \
 ```
 
 From the SDKs, pass `option_*` through the client's extra-query mechanism — see [docs.trychannel3.com/sdk](https://docs.trychannel3.com/sdk) for the exact parameter name in each language. The server returns the same `ProductDetail` shape with `variants.selected` updated to reflect the resolved configuration. Diff your requested options against `variants.selected` to detect server-side relaxation (e.g. the requested size was unavailable in the requested color).
+
+For the full variant model — search-vs-detail differences, `product_id` navigation (color-as-separate-product), and the `exists`/`available` UI tiers — see [`references/variants.md`](references/variants.md). In React, the [Channel3 UI](#ui-components-react) `useVariantSelection` hook implements this selection-and-re-resolution loop for you.
 
 ### Price Tracking — `/v0/price-tracking/...`
 
@@ -278,11 +294,18 @@ const { products } = await client.products.search({
 
 Every `ProductOffer.url` in a response is an affiliate-tracked link. Surface them as the buy buttons in any UI — sales driven through these URLs earn commission with no additional setup. Use `offer.domain` to identify the retailer and `offer.max_commission_rate` to compare earning potential across merchants.
 
+## Caching and freshness
+
+- **Cache IDs, not data.** `product.id` and category slugs are stable — cache them freely. Treat everything else on a product (prices, availability, offers, images, descriptions, variants) as unstable; it changes as merchants update catalogs.
+- **Refresh at display time.** Before showing a product to a user, refetch with `GET /v1/products/{id}` (`client.products.retrieve`) — this call is **free** and returns current prices, stock, hydrated variant availability, and fresh offer URLs.
+- **Offer URLs are short-lived.** Never cache `ProductOffer.url` and serve it later; fetch it fresh before presenting the buy link.
+- Short TTLs (minutes to a few hours) on presentational fields (title, images) are fine; avoid caching pricing or availability for hours or days.
+
 ## Locale codes
 
-- **Languages:** `en`, `de`, `fr`, `it`, `es`, `nl`, `sv`, `fi`, `pt`, `cs`
-- **Countries:** `US`, `GB`, `EU`, `AU`, `CA`, `IE`, `DE`, `AT`, `FR`, `BE`, `IT`, `ES`, `NL`, `SE`, `FI`, `PT`, `CZ`
-- **Currencies:** `USD`, `CAD`, `AUD`, `GBP`, `EUR`, `SEK`, `CZK`
+- **Languages:** `en`, `de`, `fr`, `it`, `es`, `nl`, `sv`, `fi`, `pt`, `cs`, `el`, `ro`
+- **Countries:** `US`, `GB`, `EU`, `AU`, `CA`, `IE`, `DE`, `AT`, `FR`, `BE`, `IT`, `ES`, `NL`, `SE`, `FI`, `PT`, `CZ`, `GR`, `RO`
+- **Currencies:** `USD`, `CAD`, `AUD`, `GBP`, `EUR`, `SEK`, `CZK`, `RON`
 
 When `country` is set alone, the server infers `currency` (`GB → GBP`) and `language` (`GB → en`). When all three are unset, defaults are `en` / `US` / `USD`.
 
