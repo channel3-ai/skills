@@ -43,6 +43,7 @@ Full canonical product by ID, including hydrated `variants` and `structured_attr
 - **Query:** `website_ids?` · `language?` · `country?` · `currency?` · `option_<name>=<label>` (repeatable; selects a variant configuration, e.g. `option_Color=Blue&option_Size=XL`)
 - **Response:** `ProductDetail`
 - **SDK:** `client.products.retrieve(productId, {...})` — pass `option_*` through the SDK's extra-query mechanism
+- **Variant interaction guide:** [`variants.md`](variants.md)
 
 ### `POST /v1/lookup`
 
@@ -141,7 +142,8 @@ ProductDetail {
   description?: string | null;
   brands?: ProductBrand[];
   images?: ProductImage[];
-  categories?: string[];                  // category slugs
+  categories?: string[];                  // DEPRECATED — category slugs; use `category` instead
+  category?: CategorySummary | null;      // the single category this product belongs to (slug, title, path, has_children)
   gender?: "male" | "female" | "unisex" | null;  // response value; SearchFilters.gender accepts "male" | "female" only
   age?: "newborn" | "infant" | "toddler" | "kids" | "adult" | null;
   materials?: string[] | null;
@@ -206,6 +208,7 @@ ProductImage {
   url: string;
   alt_text?: string | null;
   is_main_image?: boolean;
+  is_cleaned_image?: boolean;             // square aspect ratio, uniform monochromatic background; best for product grids
   shot_type?: "hero" | "lifestyle" | "on_model" | "detail" | "scale_reference"
             | "angle_view" | "flat_lay" | "in_use" | "packaging" | "size_chart"
             | "product_information" | "merchant_information" | null;
