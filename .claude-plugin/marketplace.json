@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "channel3-api",
-      "description": "Integrate with the Channel3 API to search products, find similar items, look up product URLs, track prices, and earn affiliate commissions across TypeScript, Python, and REST",
+      "description": "Integrate the Channel3 API for product search (text, image, semantic, and agentic), similar-products recommendations, multi-merchant offer comparison, URL lookup, conversational shopping agents, price tracking, click/transaction reporting, and affiliate commissions across TypeScript, Python, and REST — plus a React component library (shadcn registry) for storefront UIs",
       "source": "./",
       "strict": false,
       "skills": ["./skills/channel3-api"],
@@ -17,7 +17,7 @@
     },
     {
       "name": "product-discovery",
-      "description": "Search for real product data — prices, availability, merchant links, and 'more like this' recommendations — across thousands of retailers using bundled shell scripts",
+      "description": "Search for real product data — prices, availability, merchant links, and 'more like this' recommendations — across thousands of retailers using the Channel3 CLI",
       "source": "./",
       "strict": false,
       "skills": ["./skills/product-discovery"],

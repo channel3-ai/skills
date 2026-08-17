@@ -1,6 +1,6 @@
 {
   "name": "@channel3/skills",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Agent skills for product search, discovery, and API integration powered by Channel3",
   "keywords": [
     "tanstack-intent"
@@ -19,6 +19,6 @@
     "intent": "bin/intent.mjs"
   },
   "devDependencies": {
-    "@tanstack/intent": "^0.0.14"
+    "@tanstack/intent": "^0.3.6"
   }
 }

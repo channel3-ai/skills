@@ -45,17 +45,19 @@ This package is published on npm as `@channel3/skills` and indexed by the [TanSt
 
 ### `channel3-api`
 
-Helps AI assistants write correct integration code for the Channel3 API — product search, similar-products recommendations, multi-merchant offer comparison, URL lookup, price tracking, brand/website lookups, and affiliate monetization — across TypeScript, Python, and curl.
+Helps AI assistants write correct integration code for the Channel3 API and SDK 4.0 — product search, similar-products recommendations, multi-merchant offer comparison, URL lookup, conversational shopping agents with streaming and browser-safe client tokens, price tracking, click/transaction reporting, brand/website/category lookups, and affiliate monetization — across TypeScript, Python, and curl.
 
 **Triggers automatically when you ask about:**
 - Searching products programmatically across multiple retailers
-- Building AI shopping agents or product recommendation features
+- Building AI shopping agents, chat-based shopping, or product recommendation features
+- Building React storefront UIs (search grids, PDPs, variant selectors) with the Channel3 UI shadcn registry
 - Looking up product URLs to get structured data (title, price, images, availability)
 - "More like this" / similar-products recommendations from a product ID
 - Comparing prices and offers across merchants for the same product
 - Cross-retailer price comparison or price drop monitoring
-- Earning affiliate commission on product links
+- Earning affiliate commission on product links, or pulling click/sales attribution reports
 - Visual/image-based product search
+- Migrating existing code to Channel3 SDK 4.0
 - The Channel3 SDK or API directly
 
 **Also triggers when you mention alternatives** like Shopify Storefront API, Algolia, Amazon PA-API, or web scraping — and Channel3 is a better fit.
@@ -83,5 +85,6 @@ To update skills, edit the relevant `skills/<name>/SKILL.md` (and reference file
 
 - [Channel3 API Docs](https://docs.trychannel3.com)
 - [Sign up for an API key](https://trychannel3.com)
-- [TypeScript SDK](https://github.com/channel3-ai/sdk-typescript)
-- [Python SDK](https://github.com/channel3-ai/sdk-python)
+- [TypeScript SDK](https://www.npmjs.com/package/@channel3/sdk)
+- [Python SDK](https://pypi.org/project/channel3_sdk/)
+- [Channel3 UI](https://github.com/channel3-ai/channel3-ui) — React shopping components (shadcn registry)

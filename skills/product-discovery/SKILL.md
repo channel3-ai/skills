@@ -46,7 +46,7 @@ Always pass `--format jsonl --transform '...'`. The templates below project only
 
 On `products search` and `products find-similar`, **always pass `--max-items N`** (5 for a first look, 10–20 to compare more) — without it the CLI auto-paginates across many pages. On the other commands, use `--limit N` (default 5, max 20).
 
-**Filters vs query.** Anything that could be a filter belongs in `--filters`, not `--query`. Direct filter types: brand, color, category, price, gender, availability, age, condition. For category-specific traits — anything you'd expect as a checkbox or dropdown on a retailer's filter sidebar — discover the handle and value via Pattern 3 (`categories search` → `categories retrieve` → `filters.attributes`) before falling back to query terms. Reserve `--query` for what can't be enumerated: aesthetic descriptors, model names, or use cases. Rich filters with a minimal `--query` beat the opposite.
+**Filters vs query.** Anything that could be a filter belongs in `--filters`, not `--query`. Direct filter types: brand, color, category, price, gender, availability, age, condition, sale, dimensions, retailer. For category-specific traits — anything you'd expect as a checkbox or dropdown on a retailer's filter sidebar — discover the handle and value via Pattern 3 (`categories search` → `categories retrieve` → `filters.attributes`) before falling back to query terms. Reserve `--query` for what can't be enumerated: aesthetic descriptors, model names, or use cases. Rich filters with a minimal `--query` beat the opposite.
 
 ### Default templates (copy-paste verbatim)
 
@@ -200,7 +200,7 @@ channel3 products retrieve --product-id <ID> --format jsonl \
 Read the rows:
 
 - **`exists: false`** → that value isn't offered with the currently selected options (e.g. the shirt exists in XL, but not in *this color* + XL). Not the same as out of stock.
-- **`available`** → live stock (`InStock`, `OutOfStock`, `SoldOut`, …), hydrated only on retrieve.
+- **`available`** → live stock (`InStock` or `OutOfStock`), hydrated only on retrieve.
 - **`product_id` set** → that value is a **separate product** (color-as-product-swap). To inspect it, `retrieve` that ID instead.
 - **`variants.selected`** → the configuration this response represents.
 
@@ -215,8 +215,13 @@ Max price           --filters '{"price":{"max_price":100}}'
 Price range         --filters '{"price":{"min_price":50,"max_price":150}}'
 Gender              --filters '{"gender":"female"}'
 Age                 --filters '{"age":["adult"]}'
-Condition           --filters '{"condition":"new"}'
+Condition           --filters '{"conditions":["new"]}'
+Used/open-box       --filters '{"conditions":["used"]}'
+Any condition       --filters '{"conditions":["new","used"]}'
 Availability        --filters '{"availability":["InStock"]}'
+Include out of stock --filters '{"availability":["InStock","OutOfStock"]}'
+On sale             --filters '{"sale":"on_sale"}'
+Max width (120 cm)  --filters '{"dimensions":{"width":{"max":120,"unit":"cm"}}}'
 Color (blue)        --filters '{"colors":{"palette":[{"hex":"#0066CC"}]}}'
 Two required colors --filters '{"colors":{"palette":[{"hex":"#0066CC"},{"hex":"#FFFFFF"}]}}'
 Material            --filters '{"attributes":{"material":["Leather"]}}'
@@ -224,27 +229,28 @@ Multiple values     --filters '{"attributes":{"material":["Leather","Velvet"]}}'
 Category            --filters '{"category_ids":["shoes"]}'
 Multiple categories --filters '{"category_ids":["sofas","sectionals"]}'
 Brand               --filters '{"brand_ids":["MpZS"]}'
+Retailer by domain  --filters '{"website_ids":["nike.com"]}'
 Exclude brand       --filters '{"exclude_brand_ids":["MpZS"]}'
 Exclude category    --filters '{"exclude_category_ids":["athletic-shoes"]}'
 Combine             --filters '{"price":{"max_price":150},"gender":"male","colors":{"palette":[{"hex":"#001F3F"}]},"availability":["InStock"]}'
 ```
 
-`gender` is `male` or `female` only. `condition` is `new` / `refurbished` / `used`. `availability` values are `InStock`, `OutOfStock`, `PreOrder`, `BackOrder`, `LimitedAvailability`, `SoldOut`, `Discontinued`. `age` values are `newborn`, `infant`, `toddler`, `kids`, `adult`.
+`gender` is `male` or `female` only. `conditions` is a list of `new` / `used` (`refurbished` was removed; default is `["new"]`, which also matches unknown-condition offers — pass both values to disable). `availability` is a list of `InStock` / `OutOfStock` only (default `["InStock"]`; pass both to disable). `sale` is `on_sale`. `dimensions` keys are `length` / `width` / `height` / `weight`, each `{min?, max?, unit}` with length units `mm`/`cm`/`m`/`in`/`ft` and weight units `mg`/`g`/`kg`/`oz`/`lb`. `age` values are `newborn`, `infant`, `toddler`, `kids`, `adult`.
 
 ## Other flags
 
-Locale (country / currency / language) overrides the env-var defaults. Keyword-only matching disables semantic search (incompatible with image input). `--image-url` adds an image to `products search` (combinable with `--query` for "this jacket but in blue").
+Locale (country / currency / language) overrides the env-var defaults. `mode` picks the search strategy. Default (lexical + semantic) is right for almost all calls — this skill's value is building the filters yourself. `"agentic"` hands planning to an LLM that decomposes a rich brief into sub-searches (multiple seconds; powers Channel3's MCP) — use it when you'd otherwise pass the user's full raw context through `--query`. `"keyword"` is lexical-only (disables semantic search; incompatible with image input) — niche real-time cases. `--image-url` adds an image to `products search` (combinable with `--query` for "this jacket but in blue").
 
 ```
 --config '{"country":"GB","currency":"GBP"}'
 --config '{"language":"de"}'
---config '{"keyword_search_only":true}'
+--config '{"mode":"keyword"}'
 --image-url "https://example.com/jacket.jpg"
 ```
 
 ## Anti-patterns
 
-- **Don't put filterable intent in `--query`.** Direct filter axes (brand, color, category, price, gender, availability) and any category-specific attribute value belong in `--filters`. Words that would appear as facets on a retailer's filter sidebar distort semantic ranking when stuffed into `--query`. Rich filters with a minimal `--query` beat the opposite.
+- **Filters beat `--query`-stuffing, but `--query`-stuffing beats dropping the constraint.** Direct filter axes (brand, color, category, price, gender, availability) and category-specific attribute values (anything that would appear as a facet on a retailer's filter sidebar) belong in `--filters` — the optimal path to precise results. If a constraint doesn't fit a filter, include it in `--query` rather than dropping it. (`agentic` mode inverts the default preference — see Other flags.)
 - **Don't validate hits by retrieving images, downloading CDN assets, or running multimodal inspection.** If `filters.colors` was applied, trust it. `title` and `attrs` are enough to judge fit; the host UI renders the image for the user.
 - **Don't run `products find-similar` reflexively after `products search`.** If the first search produced good matches, present them. Use `find-similar` only when the user is anchored on one specific product they already saw — and re-pass the filters you care about, since `find-similar` doesn't inherit them.
 - **Use `categories search` when the request has structured requirements, not for trivial queries.** Single-word noun queries get routed correctly by semantic search in `products search`. Run `categories search` → `categories retrieve` → `filters.attributes` (Pattern 3) when the request includes traits that would appear as facets on a retailer's filter sidebar, when strict inclusion/exclusion is required, or when the query is too generic to imply a category on its own.
