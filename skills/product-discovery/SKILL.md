@@ -12,14 +12,14 @@ Uses the [Channel3 CLI](https://docs.trychannel3.com/cli) to query a catalog of 
 
 | User wants... | Run |
 |---|---|
-| Find products by description, image, or both | `channel3 products search --query "..." --max-items N` |
-| More like this product I already found | `channel3 products find-similar --product-id <ID> --max-items N` |
-| Find a category slug to use as a filter | `channel3 categories search --query "..." --limit 5` |
+| Find products by description, image, or both | `channel3 products search --query-param "..." --limit N` |
+| More like this product I already found | `channel3 products find-similar --product-id <ID> --limit N` |
+| Find a category slug to use as a filter | `channel3 categories search --query-param "..." --limit 5` |
 | See a category's allowed attribute keys/values for `filters.attributes` | `channel3 categories retrieve --slug <slug>` |
 | Filter by a color (blue, navy, red, ...) | `--filters '{"colors":{"palette":[{"hex":"#..."}]}}'` (sRGB hex; **never** put color into `filters.attributes`) |
 | Filter by non-color attributes (material, frame-color, ...) | `channel3 categories retrieve --slug <slug>` first, then `--filters '{"attributes":{"handle":["Value"]}}'` |
 | See variant options + live stock for a product | `channel3 products retrieve --product-id <ID>` (read `variants.options` / `variants.selected`) — see Pattern 6 |
-| Find a brand ID to use as a filter | `channel3 brands search --query "<name>" --limit 5` |
+| Find a brand ID to use as a filter | `channel3 brands search --query-param "<name>" --limit 5` |
 | Wire Channel3 into their agent host directly (no CLI) | Channel3 MCP — see below |
 
 ## Setup
@@ -27,9 +27,7 @@ Uses the [Channel3 CLI](https://docs.trychannel3.com/cli) to query a catalog of 
 The skill assumes the `channel3` CLI is installed and on `PATH`.
 
 ```bash
-brew install channel3-ai/tap/channel3
-# or, on systems without brew:
-go install github.com/channel3-ai/cli/cmd/channel3@latest
+npm install -g @channel3/cli
 
 export CHANNEL3_API_KEY="..."   # free key at https://trychannel3.com
 ```
@@ -40,34 +38,36 @@ If `channel3 --version` fails, fail loudly with the install instruction above �
 
 ## Calling the CLI
 
-Always pass `--format jsonl --transform '...'`. The templates below project only decision-critical fields; default JSON is verbose. Never auto-pick the first element of a result array — project the whole array and read every entry. The transform language is [GJSON](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
+Always pass `--format jsonl --query '...'`. The templates below project only decision-critical fields; default JSON is verbose. Never auto-pick the first element of a result array — project the whole array and read every entry. The projection language is [JMESPath](https://jmespath.org).
 
-`products search` and `products find-similar` **stream individual products**, so transforms apply per record (`{id,title,...}`). The other commands return a **wrapped response** — transforms start at `brands.#.{...}` / `categories.#.{...}` / `attributes.#.{...}`.
+**`--query` is the projection flag. The search term is `--query-param`.** They are different things, and mixing them up is the most common mistake against this CLI.
 
-On `products search` and `products find-similar`, **always pass `--max-items N`** (5 for a first look, 10–20 to compare more) — without it the CLI auto-paginates across many pages. On the other commands, use `--limit N` (default 5, max 20).
+`--query` applies to the whole response, so every projection starts at the wrapper key — `products[]`, `brands[]`, `categories[]`, `attributes[]`. With `--format jsonl` the resulting array is flattened to one record per line.
 
-**Filters vs query.** Anything that could be a filter belongs in `--filters`, not `--query`. Direct filter types: brand, color, category, price, gender, availability, age, condition, sale, dimensions, retailer. For category-specific traits — anything you'd expect as a checkbox or dropdown on a retailer's filter sidebar — discover the handle and value via Pattern 3 (`categories search` → `categories retrieve` → `filters.attributes`) before falling back to query terms. Reserve `--query` for what can't be enumerated: aesthetic descriptors, model names, or use cases. Rich filters with a minimal `--query` beat the opposite.
+Use `--limit N` to size the result set (5 for a first look, 10–20 to compare more). The CLI does **not** auto-paginate: it returns a single page unless you pass `--page-all`, which streams every page as NDJSON up to `--page-limit` (default 10). Don't pass `--page-all` for interactive product discovery — it bloats context.
+
+**Filters vs query.** Anything that could be a filter belongs in `--filters`, not `--query-param`. Direct filter types: brand, color, category, price, gender, availability, age, condition, sale, dimensions, retailer. For category-specific traits — anything you'd expect as a checkbox or dropdown on a retailer's filter sidebar — discover the handle and value via Pattern 3 (`categories search` → `categories retrieve` → `filters.attributes`) before falling back to query terms. Reserve `--query-param` for what can't be enumerated: aesthetic descriptors, model names, or use cases. Rich filters with a minimal `--query-param` beat the opposite.
 
 ### Default templates (copy-paste verbatim)
 
 `products search` / `products find-similar`:
 
 ```
---max-items N \
+--limit N \
 --format jsonl \
---transform '{id,title,brands:brands.#.name,offers:offers.#.{domain,price:price.price,currency:price.currency,availability,url},attrs:structured_attributes}'
+--query 'products[].{id: id, title: title, brands: brands[].name, offers: offers[].{domain: domain, price: price.price, currency: price.currency, availability: availability, url: url}, attrs: structured_attributes}'
 ```
 
 - `brands` is the array of brand names (some products have multiple).
-- `offers` is the **full array** of merchant offers. Compare across `domain` / `price` / `availability` to recommend the right buy link. This multi-merchant comparison is the point of Channel3 — never collapse it to `offers.0`.
+- `offers` is the **full array** of merchant offers. Compare across `domain` / `price` / `availability` to recommend the right buy link. This multi-merchant comparison is the point of Channel3 — never collapse it to `offers[0]`.
 - `attrs` (`structured_attributes`) shows what the catalog extracted — e.g. `{"color":["Navy"],"material":["Leather"]}` — so the agent can judge fit without another call.
-- Add `commission:max_commission_rate` inside `offers.#.{...}` if affiliate revenue matters for ranking.
+- Add `commission: max_commission_rate` inside `offers[].{...}` if affiliate revenue matters for ranking.
 
 `brands search`:
 
 ```
 --limit 5 --format jsonl \
---transform 'brands.#.{id,name,description,commission:best_commission_rate}'
+--query 'brands[].{id: id, name: name, description: description, commission: best_commission_rate}'
 ```
 
 `description` and `commission` are decision-critical: multiple brands often share a name (e.g. searching "Nike" returns two distinct IDs — `Nike` the manufacturer and `Nike` the retail store house brand, with different commission rates).
@@ -76,7 +76,7 @@ On `products search` and `products find-similar`, **always pass `--max-items N`*
 
 ```
 --limit 5 --format jsonl \
---transform 'categories.#.{slug,title,path}'
+--query 'categories[].{slug: slug, title: title, path: path}'
 ```
 
 `path` is the ancestor chain (`Furniture > Sofas`); use it to disambiguate near-duplicate slugs.
@@ -85,7 +85,7 @@ On `products search` and `products find-similar`, **always pass `--max-items N`*
 
 ```
 --format jsonl \
---transform 'attributes.#.{slug,name,values}'
+--query 'attributes[].{slug: slug, name: name, values: values}'
 ```
 
 Drops the prose description and children — the attribute table is what feeds `filters.attributes`.
@@ -99,8 +99,8 @@ Each pattern is **call → read → decide → next call**. The agent reads ever
 User: "Nike running shoes, no other brands."
 
 ```bash
-channel3 brands search --query "Nike" --limit 5 --format jsonl \
-  --transform 'brands.#.{id,name,description,commission:best_commission_rate}'
+channel3 brands search --query-param "Nike" --limit 5 --format jsonl \
+  --query 'brands[].{id: id, name: name, description: description, commission: best_commission_rate}'
 ```
 
 Read all results. Pick the `id` that matches user intent:
@@ -112,10 +112,10 @@ Read all results. Pick the `id` that matches user intent:
 - No match? Try a query variant (typos, common variants) before telling the user the brand isn't catalogued.
 
 ```bash
-channel3 products search --query "running shoes" --max-items 10 \
+channel3 products search --query-param "running shoes" --limit 10 \
   --filters '{"brand_ids":["<id chosen above>"]}' \
   --format jsonl \
-  --transform '{id,title,brands:brands.#.name,offers:offers.#.{domain,price:price.price,currency:price.currency,availability,url},attrs:structured_attributes}'
+  --query 'products[].{id: id, title: title, brands: brands[].name, offers: offers[].{domain: domain, price: price.price, currency: price.currency, availability: availability, url: url}, attrs: structured_attributes}'
 ```
 
 ### 2. More like this
@@ -123,10 +123,10 @@ channel3 products search --query "running shoes" --max-items 10 \
 The agent already has products from a prior `products search`. Pick the `id` of the one the user actually referenced — not blindly the first hit.
 
 ```bash
-channel3 products find-similar --product-id <chosen-id> --max-items 10 \
+channel3 products find-similar --product-id <chosen-id> --limit 10 \
   --filters '{"gender":"female"}' \
   --format jsonl \
-  --transform '{id,title,brands:brands.#.name,offers:offers.#.{domain,price:price.price,currency:price.currency,availability,url},attrs:structured_attributes}'
+  --query 'products[].{id: id, title: title, brands: brands[].name, offers: offers[].{domain: domain, price: price.price, currency: price.currency, availability: availability, url: url}, attrs: structured_attributes}'
 ```
 
 `find-similar` carries the source product's visual embedding but **does not inherit your filters**. If the reason you liked the source was filterable (color, brand, price), re-pass those filters explicitly.
@@ -140,24 +140,24 @@ Each category exposes its own attribute schema — a list of handles (`material`
 User: "leather sectional sofa."
 
 ```bash
-channel3 categories search --query "sofa" --limit 5 --format jsonl \
-  --transform 'categories.#.{slug,title,path}'
+channel3 categories search --query-param "sofa" --limit 5 --format jsonl \
+  --query 'categories[].{slug: slug, title: title, path: path}'
 ```
 
 Read all results. Pick the slug whose `path` matches user intent (`Furniture > Sofas`, not `Outdoor > Sofas` unless they said outdoor). Multiple slugs are fine when scope is broader (e.g. `sofas,sectionals`).
 
 ```bash
 channel3 categories retrieve --slug sofas --format jsonl \
-  --transform 'attributes.#.{slug,name,values}'
+  --query 'attributes[].{slug: slug, name: name, values: values}'
 ```
 
 Read all attribute rows. Pick non-`color` handles and verbatim values. (Color always goes through `filters.colors` — see Pattern 4.)
 
 ```bash
-channel3 products search --query "sectional" --max-items 10 \
+channel3 products search --query-param "sectional" --limit 10 \
   --filters '{"category_ids":["sofas"],"attributes":{"material":["Leather"]}}' \
   --format jsonl \
-  --transform '{id,title,brands:brands.#.name,offers:offers.#.{domain,price:price.price,currency:price.currency,availability,url},attrs:structured_attributes}'
+  --query 'products[].{id: id, title: title, brands: brands[].name, offers: offers[].{domain: domain, price: price.price, currency: price.currency, availability: availability, url: url}, attrs: structured_attributes}'
 ```
 
 ### 4. Filter by color
@@ -167,10 +167,10 @@ User: "blue Nike sneakers."
 Map the color name to its closest sRGB hex (`blue` → `#0066CC`, `navy` → `#001F3F`, etc.) and pass it through `filters.colors.palette`. No category lookup needed for color. Multiple entries match products containing those colors. **Only add `"percentage": N`** when the user expresses an asymmetric balance between colors (e.g. "mostly red with some green", "70% red 30% blue"); plain "mostly red" or "mostly red and green" doesn't need it. For "multicolor" or "any color", omit the colors filter entirely.
 
 ```bash
-channel3 products search --query "sneakers" --max-items 10 \
+channel3 products search --query-param "sneakers" --limit 10 \
   --filters '{"colors":{"palette":[{"hex":"#0066CC"}]}}' \
   --format jsonl \
-  --transform '{id,title,brands:brands.#.name,offers:offers.#.{domain,price:price.price,currency:price.currency,availability,url},attrs:structured_attributes}'
+  --query 'products[].{id: id, title: title, brands: brands[].name, offers: offers[].{domain: domain, price: price.price, currency: price.currency, availability: availability, url: url}, attrs: structured_attributes}'
 ```
 
 ### 5. Refinement when results don't match intent
@@ -182,7 +182,7 @@ If a search returns zero or clearly off-intent results, run another search with 
 - **Brand drift** (asked for one brand, got many) → add strict `brand_ids` via Pattern 1.
 - **Mostly out of stock** → add `{"availability":["InStock"]}`.
 - **Wrong gender / age** → add `{"gender":"..."}` or `{"age":["adult"]}`.
-- **Need more results** of the same shape → re-run with a larger `--max-items`.
+- **Need more results** of the same shape → re-run with a larger `--limit`.
 
 Stop once results are presentable — don't keep searching hoping for "better." **Never validate hits by retrieving images, downloading CDN assets, or running `find-similar` to double-check** — the filters and `attrs`/`title` are the source of truth, and the host UI will render the image for the user.
 
@@ -194,7 +194,7 @@ User: "does this come in XL?" / "what colors does it come in?" / "is the navy on
 
 ```bash
 channel3 products retrieve --product-id <ID> --format jsonl \
-  --transform '{title,variants:variants.{selected,options:options.#.{name,values:values.#.{label,exists,available,product_id}}}}'
+  --query '{title: title, variants: {selected: variants.selected, options: variants.options[].{name: name, values: values[].{label: label, exists: exists, available: available, product_id: product_id}}}}'
 ```
 
 Read the rows:
@@ -239,7 +239,7 @@ Combine             --filters '{"price":{"max_price":150},"gender":"male","color
 
 ## Other flags
 
-Locale (country / currency / language) overrides the env-var defaults. `mode` picks the search strategy. Default (lexical + semantic) is right for almost all calls — this skill's value is building the filters yourself. `"agentic"` hands planning to an LLM that decomposes a rich brief into sub-searches (multiple seconds; powers Channel3's MCP) — use it when you'd otherwise pass the user's full raw context through `--query`. `"keyword"` is lexical-only (disables semantic search; incompatible with image input) — niche real-time cases. `--image-url` adds an image to `products search` (combinable with `--query` for "this jacket but in blue").
+Locale (country / currency / language) overrides the env-var defaults. `mode` picks the search strategy. Default (lexical + semantic) is right for almost all calls — this skill's value is building the filters yourself. `"agentic"` hands planning to an LLM that decomposes a rich brief into sub-searches (multiple seconds; powers Channel3's MCP) — use it when you'd otherwise pass the user's full raw context through `--query-param`. `"keyword"` is lexical-only (disables semantic search; incompatible with image input) — niche real-time cases. `--image-url` adds an image to `products search` (combinable with `--query-param` for "this jacket but in blue").
 
 ```
 --config '{"country":"GB","currency":"GBP"}'
@@ -250,15 +250,16 @@ Locale (country / currency / language) overrides the env-var defaults. `mode` pi
 
 ## Anti-patterns
 
-- **Filters beat `--query`-stuffing, but `--query`-stuffing beats dropping the constraint.** Direct filter axes (brand, color, category, price, gender, availability) and category-specific attribute values (anything that would appear as a facet on a retailer's filter sidebar) belong in `--filters` — the optimal path to precise results. If a constraint doesn't fit a filter, include it in `--query` rather than dropping it. (`agentic` mode inverts the default preference — see Other flags.)
+- **Filters beat `--query-param`-stuffing, but `--query-param`-stuffing beats dropping the constraint.** Direct filter axes (brand, color, category, price, gender, availability) and category-specific attribute values (anything that would appear as a facet on a retailer's filter sidebar) belong in `--filters` — the optimal path to precise results. If a constraint doesn't fit a filter, include it in `--query-param` rather than dropping it. (`agentic` mode inverts the default preference — see Other flags.)
 - **Don't validate hits by retrieving images, downloading CDN assets, or running multimodal inspection.** If `filters.colors` was applied, trust it. `title` and `attrs` are enough to judge fit; the host UI renders the image for the user.
 - **Don't run `products find-similar` reflexively after `products search`.** If the first search produced good matches, present them. Use `find-similar` only when the user is anchored on one specific product they already saw — and re-pass the filters you care about, since `find-similar` doesn't inherit them.
 - **Use `categories search` when the request has structured requirements, not for trivial queries.** Single-word noun queries get routed correctly by semantic search in `products search`. Run `categories search` → `categories retrieve` → `filters.attributes` (Pattern 3) when the request includes traits that would appear as facets on a retailer's filter sidebar, when strict inclusion/exclusion is required, or when the query is too generic to imply a category on its own.
 - **Don't run `brands search` by default.** Semantic search already biases toward in-brand matches when the brand name is in the query. Reach for `brands search` only when (a) strict inclusion is required ("only Nike, not Nike-mentioning"), (b) exclusion is required ("running shoes excluding Nike"), or (c) the user is anchored on one brand ("what does Patagonia sell").
 - **Never use `filters.attributes` for color.** Color always goes through `filters.colors` with a hex value. Even if `categories retrieve` lists a `color` attribute, skip it for filtering.
 - **Don't guess attribute handles or values.** Unknown handles/values match nothing useful. Run `categories retrieve --slug <slug>` first and copy non-`color` handles verbatim.
-- **Don't use `.0` / `.1` indexing to "pick a result."** Project the whole array so the agent reads every entry and decides. Top-level singletons (no array) are the only exception.
-- **Don't omit `--max-items` on `products search` / `find-similar`.** Without it the CLI auto-paginates, returning many pages of results and bloating context.
+- **Don't use `[0]` / `[1]` indexing to "pick a result."** Project the whole array so the agent reads every entry and decides. Top-level singletons (no array) are the only exception.
+- **Don't confuse `--query` with `--query-param`.** `--query` is a JMESPath projection over the response; `--query-param` is the search term. Passing a search phrase to `--query` fails with a JMESPath parse error, and a single word silently returns `null`.
+- **Don't pass `--page-all` for product discovery.** It streams every page and bloats context. Size results with `--limit` instead.
 
 ## Presenting results
 

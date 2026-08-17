@@ -19,9 +19,7 @@ npx skills add channel3-ai/skills --skill product-discovery
 The `product-discovery` skill calls the Channel3 CLI. Install it once:
 
 ```bash
-brew install channel3-ai/tap/channel3
-# or, on systems without brew:
-go install github.com/channel3-ai/cli/cmd/channel3@latest
+npm install -g @channel3/cli
 
 export CHANNEL3_API_KEY="..."   # free key at https://trychannel3.com
 ```
