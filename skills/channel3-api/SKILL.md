@@ -73,13 +73,18 @@ Locale defaults can be set client-wide via constructor (`new Channel3({ country:
 For ad-hoc API exploration from a terminal — sanity-checking a filter shape, grabbing a `product_id` to feed into integration tests, or one-off calls without a project — use the [Channel3 CLI](https://docs.trychannel3.com/cli). It tracks the API spec automatically.
 
 ```bash
-brew install channel3-ai/tap/channel3   # or: go install github.com/channel3-ai/cli/cmd/channel3@latest
+npm install -g @channel3/cli
 export CHANNEL3_API_KEY="..."
 
-channel3 products search --query "running shoes" --max-items 5 \
+channel3 products search --query-param "running shoes" --limit 5 \
   --filters '{"price":{"max_price":100},"gender":"male"}' \
-  --format jsonl --transform '{id,title,offers:offers.#.{domain,price:price.price,url}}'
+  --format jsonl \
+  --query 'products[].{id: id, title: title, offers: offers[].{domain: domain, price: price.price, url: url}}'
 ```
+
+`--query-param` is the search term; `--query` is a [JMESPath](https://jmespath.org)
+projection over the response. In CLI versions up to `0.4.1` the search term was
+`--query` — old commands need updating.
 
 Use the SDK for production code. The CLI is for terminal work.
 
