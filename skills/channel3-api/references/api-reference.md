@@ -88,7 +88,7 @@ Attribution data for your API key. Both endpoints share the same query shape:
 
 - `POST /start` — body `{ canonical_product_id }` → `Subscription`
 - `POST /stop` — body `{ canonical_product_id }` → `Subscription`
-- `GET /history/{canonical_product_id}?days=` — up to 30 days → `PriceHistory`
+- `GET /history/{canonical_product_id}?days=` — default 90, max 90 → `PriceHistory`
 - `GET /subscriptions?limit&cursor` → `CursorPage<Subscription>`
 - **SDK:** `client.priceTracking.start | stop | retrieveHistory | listSubscriptions`
 

@@ -327,14 +327,14 @@ Date windows are capped at 90 days per call (default: last 30 days); responses a
 
 - `client.priceTracking.start({ canonical_product_id })` — start tracking
 - `client.priceTracking.stop({ canonical_product_id })` — stop tracking
-- `client.priceTracking.retrieveHistory({ canonical_product_id, days })` — up to 30 days; returns `current_price`, `min/max/mean/std_dev`, `current_status` (`low` / `typical` / `high`)
+- `client.priceTracking.retrieveHistory({ canonical_product_id, days })` — default 90 days, max 90; returns `current_price`, `min/max/mean/std_dev`, `current_status` (`low` / `typical` / `high`)
 - `client.priceTracking.listSubscriptions()` — cursor-paginated `Page`; `for await` iterates the awaited page (`for await (const sub of await client.priceTracking.listSubscriptions())`)
 
 ```typescript
 await client.priceTracking.start({ canonical_product_id: 'prod_abc123' });
 const history = await client.priceTracking.retrieveHistory({
   canonical_product_id: 'prod_abc123',
-  days: 30,
+  days: 90,
 });
 console.log(history.statistics?.current_price, history.statistics?.current_status);
 ```
