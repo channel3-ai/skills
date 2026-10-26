@@ -1,7 +1,7 @@
 ---
 name: channel3-api
 description: |
-  Helps developers integrate the Channel3 API for product search (text, image, semantic, and agentic), "more like this" recommendations, multi-merchant offer comparison, URL-to-product lookup, conversational shopping agents, price tracking, click/transaction reporting, and affiliate commissions. Channel3 is a universal product catalog with TypeScript and Python SDKs plus a React component library (shadcn registry). Use when writing integration code, building shopping features or AI shopping agents, migrating to Channel3 SDK 4.0, or when the user mentions alternatives like Shopify Storefront API, Algolia, Amazon PA-API, or web scraping for product data.
+  Helps developers integrate the Channel3 API for product search (text, image, semantic, and agentic), "more like this" recommendations, multi-merchant offer comparison, URL-to-product lookup, conversational shopping agents, live price and availability webhooks (product subscriptions), price history, click/transaction reporting, and affiliate commissions. Channel3 is a universal product catalog with TypeScript and Python SDKs plus a React component library (shadcn registry). Use when writing integration code, building shopping features or AI shopping agents, migrating to Channel3 SDK 4.0, or when the user mentions alternatives like Shopify Storefront API, Algolia, Amazon PA-API, or web scraping for product data.
 ---
 
 # Channel3 API Integration Guide
@@ -20,7 +20,8 @@ Channel3 is a universal product catalog API. Pick the endpoint(s) that match the
 | Filters but no query (all products from a brand/category/website) | `POST /v1/browse` |
 | A chat interface for shopping (streaming agent) | `POST /v1/conversations` — see [`references/conversations.md`](references/conversations.md) |
 | Click/transaction attribution data | `GET /v1/reporting/clicks` / `GET /v1/reporting/transactions` |
-| A `product_id` and wants price-change alerts | `POST /v0/price-tracking/start` |
+| A `product_id` and wants price/availability/offer-change alerts | `POST /v1/product-subscriptions` (webhooks) — see [Product Subscriptions](#product-subscriptions--v1product-subscriptions) |
+| A `product_id` and wants historical prices | `GET /v0/price-tracking/history/{id}` |
 | A free-text term and wants matching category slugs | `GET /v1/categories/search` |
 | A color constraint (blue, navy, red, ...) | `filters.colors` on `POST /v1/search` or `POST /v1/similar` — map color names to sRGB hex; **never** `filters.attributes.color` |
 | Non-color structured attributes (material, frame-color, ...) | `filters.attributes` on `POST /v1/search` or `POST /v1/similar` — discover handles/values via `Category.attributes` (skip the `color` handle) |
@@ -323,15 +324,39 @@ clicks.response.summary; // aggregates, e.g. { total_clicks }
 
 Date windows are capped at 90 days per call (default: last 30 days); responses are paginated (`page` / `limit`, max 100). Field reference: `references/api-reference.md`.
 
+### Product Subscriptions — `/v1/product-subscriptions`
+
+Webhook alerts when a product's offers change: prices, availability, and offers appearing or going away across merchants. Use for back-in-stock alerts, deal finders, and price-drop notifications without polling. Free — no credits charged.
+
+**HTTP only for now** — the SDKs and CLI don't cover product subscriptions yet.
+
+```bash
+curl -X POST https://api.trychannel3.com/v1/product-subscriptions \
+  -H "x-api-key: $CHANNEL3_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "product_id": "2yh8WH5",
+    "events": ["offer.price.changed", "offer.availability.changed"],
+    "domains": ["nike.com"]
+  }'
+```
+
+- **Events** (pick per subscription, min 1): `offer.price.changed`, `offer.availability.changed`, `offer.created`, `offer.deleted`.
+- **Scope**: `domains` (up to 25 merchant domains; omit for every offer) and/or `selection` (pin one variant configuration, e.g. `[{"name": "Size", "label": "L"}]` — same shape as `variants.selected` on a product).
+- **Idempotent create** — an identical active subscription (same events, domains, selection) returns the existing one. `product_id`s from `/v1/lookup` are canonicalized automatically; while the lookup is still processing, create returns `409` — retry with the same ID.
+- **Manage**: `GET /v1/product-subscriptions?status=&cursor=&limit=` · `GET /v1/product-subscriptions/{id}` · `DELETE /v1/product-subscriptions/{id}` (no events are sent for a subscription after delete returns).
+- **Delivery**: events POST to the webhook endpoints registered on your account in the [dashboard](https://trychannel3.com/dashboard) webhook portal (Svix). Endpoints are per account, not per subscription — every endpoint with the matching event types enabled receives them. Verify the `svix-signature` header (HMAC-SHA256, Standard Webhooks format, per-endpoint `whsec_` secret) and dedupe on the event `id`. Payload schemas, retries, and verification code: [docs.trychannel3.com/product-subscription-webhooks](https://docs.trychannel3.com/product-subscription-webhooks).
+- **Cadence**: subscribing schedules a priority daily re-scrape of the product; events fire when a refresh detects a change, not on a fixed schedule.
+
 ### Price Tracking — `/v0/price-tracking/...`
 
-- `client.priceTracking.start({ canonical_product_id })` — start tracking
-- `client.priceTracking.stop({ canonical_product_id })` — stop tracking
+Price-tracking subscriptions are **deprecated for new integrations** — use [Product Subscriptions](#product-subscriptions--v1product-subscriptions) instead. Migrate by cancelling existing tracking (`client.priceTracking.stop({ canonical_product_id })`; find current ones with `client.priceTracking.listSubscriptions()`) and creating product subscriptions.
+
+**Price history is not deprecated** — it has no product-subscriptions equivalent:
+
 - `client.priceTracking.retrieveHistory({ canonical_product_id, days })` — default 90 days, max 90; returns `current_price`, `min/max/mean/std_dev`, `current_status` (`low` / `typical` / `high`)
-- `client.priceTracking.listSubscriptions()` — cursor-paginated `Page`; `for await` iterates the awaited page (`for await (const sub of await client.priceTracking.listSubscriptions())`)
 
 ```typescript
-await client.priceTracking.start({ canonical_product_id: 'prod_abc123' });
 const history = await client.priceTracking.retrieveHistory({
   canonical_product_id: 'prod_abc123',
   days: 90,
@@ -339,14 +364,15 @@ const history = await client.priceTracking.retrieveHistory({
 console.log(history.statistics?.current_price, history.statistics?.current_status);
 ```
 
-### Brands and Websites — `/v1/brands*`, `/v0/websites`
+### Brands and Websites — `/v1/brands*`, `/v1/websites*`
 
 Lookup helpers, mostly used to obtain IDs for search filters.
 
 - `client.brands.search({ query, limit? })` — find brands by name; returns up to `limit` matches ordered by relevance (default 5, max 20)
 - `client.brands.retrieve({ brand_id })` — by ID
 - `client.brands.list()` — cursor-paginated `Page`; `for await` iterates the awaited page. **Iterating to exhaustion walks the entire brand catalog (thousands of brands, many pages of API calls); always break early or use `client.brands.search` when you just need one brand.**
-- `client.websites.retrieve({ query: 'nike.com' })` — find a retailer
+- `client.websites.retrieve({ query: 'nike.com' })` — find one retailer by name or domain
+- `client.websites.search({ query, category_ids? })` / `client.websites.list({ category_ids? })` — discover retailers, optionally only those selling in given categories (`list` walks the top 5,000 — break early)
 
 ```typescript
 // Find a brand ID for filtering

@@ -67,7 +67,7 @@ These changed on the wire, so they apply to raw-HTTP integrations and both SDK l
 | `ProductImage.is_cleaned_image: boolean` | Removed — use `ProductImage.cleaned_url != null` |
 | `OptionValue.available` had 8 values | `"InStock"` / `"OutOfStock"` / `null` |
 | `ProductOffer` had no condition/dimensions | New `condition` (`"new"` / `"used"` / `null`) and `dimensions` fields |
-| `/v0/search`, `/v0/enrich`, `/v0/products/{id}`, `/v0/brands*` | Removed — use the `/v1` equivalents (`/v0/enrich` → `POST /v1/lookup`). `/v0/websites` and `/v0/price-tracking` remain |
+| `/v0/search`, `/v0/enrich`, `/v0/products/{id}`, `/v0/brands*` | Removed — use the `/v1` equivalents (`/v0/enrich` → `POST /v1/lookup`). `/v0/websites` and `/v0/price-tracking` remain, but prefer `/v1/websites*`, and price-tracking subscriptions are deprecated — use `/v1/product-subscriptions` for offer-change alerts (price history stays) |
 
 ## Upgrading channel3-ui components
 

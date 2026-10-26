@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "channel3-api",
-      "description": "Integrate the Channel3 API for product search (text, image, semantic, and agentic), similar-products recommendations, multi-merchant offer comparison, URL lookup, conversational shopping agents, price tracking, click/transaction reporting, and affiliate commissions across TypeScript, Python, and REST — plus a React component library (shadcn registry) for storefront UIs",
+      "description": "Integrate the Channel3 API for product search (text, image, semantic, and agentic), similar-products recommendations, multi-merchant offer comparison, URL lookup, conversational shopping agents, live price and availability webhooks (product subscriptions), price history, click/transaction reporting, and affiliate commissions across TypeScript, Python, and REST — plus a React component library (shadcn registry) for storefront UIs",
       "source": "./",
       "strict": false,
       "skills": ["./skills/channel3-api"],

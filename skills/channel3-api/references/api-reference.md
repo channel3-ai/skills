@@ -1,15 +1,15 @@
 # Channel3 API Reference (offline quick-card)
 
-> **For full request/response schemas with try-it examples, see [docs.trychannel3.com/api-reference](https://docs.trychannel3.com/api-reference).** This file is a minimal offline backstop — endpoint signatures, the high-traffic `SearchFilters` / `SearchConfig` / `LocaleConfig` shapes, and compact response types. Matches SDK 4.0.
+> **For full request/response schemas with try-it examples, see [docs.trychannel3.com/api-reference](https://docs.trychannel3.com/api-reference).** This file is a minimal offline backstop — endpoint signatures, the high-traffic `SearchFilters` / `SearchConfig` / `LocaleConfig` shapes, and compact response types. Matches SDK 4.x.
 
-**Base URL:** `https://api.trychannel3.com` · **Auth:** `x-api-key` header (conversations also accept `Authorization: Bearer c3_ct_...` client tokens) · `/v1` for everything except price-tracking/websites (`/v0`).
+**Base URL:** `https://api.trychannel3.com` · **Auth:** `x-api-key` header (conversations also accept `Authorization: Bearer c3_ct_...` client tokens) · `/v1` for everything except price tracking (`/v0`).
 
 ## Contents
 
-- Endpoint quick-cards (`/v1/search`, `/v1/similar`, `/v1/products/{id}`, `/v1/lookup`, `/v1/browse`, conversations, reporting, price tracking, brands and websites, categories)
+- Endpoint quick-cards (`/v1/search`, `/v1/similar`, `/v1/products/{id}`, `/v1/lookup`, `/v1/browse`, conversations, reporting, product subscriptions, price tracking, brands and websites, categories)
 - `SearchFilters` shape (including `attributes`, `colors`, `dimensions`)
 - `SearchConfig` and `LocaleConfig` shapes
-- Core response types (`SearchResponse`, `Product`, `ProductOffer`, `Price`, `ProductImage`, `Dimensions`, `Variants`, `VariantOption`, `OptionValue`, `SelectedOption`, `Brand`, `Website`, `PriceHistory`, `Subscription`, `CategorySummary`, `Category`, `CategoryRef`, `CategoryAttribute`, reporting types)
+- Core response types (`SearchResponse`, `Product`, `ProductOffer`, `Price`, `ProductImage`, `Dimensions`, `Variants`, `VariantOption`, `OptionValue`, `SelectedOption`, `Brand`, `Website`, `PriceHistory`, `ProductSubscription`, `CategorySummary`, `Category`, `CategoryRef`, `CategoryAttribute`, reporting types)
 - Color filter helpers (`SearchColorsFilter`, `SearchFilterColor`)
 
 For locale codes (languages, countries, currencies, units) and inference rules, see SKILL.md. For the conversational API's auth model and SSE events, see [`conversations.md`](conversations.md).
@@ -84,20 +84,32 @@ Attribution data for your API key. Both endpoints share the same query shape:
 - `GET /v1/reporting/transactions` → `TransactionsResponse`
 - **SDK:** `client.reporting.listClicks({...})` · `client.reporting.listTransactions({...})` (TS) / `client.reporting.list_clicks({...})` · `client.reporting.list_transactions({...})` (Python)
 
+### Product subscriptions — `/v1/product-subscriptions`
+
+Webhook alerts on a product's offer changes (price, availability, offer lifecycle). Delivered via Svix to endpoints managed in the dashboard webhook portal. Free. **HTTP only — not in the SDKs or CLI yet.**
+
+- `POST /v1/product-subscriptions` — body `{ product_id, events: OfferEventType[] (min 1), domains?: string[] (max 25), selection?: SelectedOption[] }` → `ProductSubscription`. Idempotent per scope: an identical active subscription returns the existing one. `409` while a `/v1/lookup` ID is still processing — retry with the same ID
+- `GET /v1/product-subscriptions?status&cursor&limit` (`status` `active` | `cancelled`, default `active`; `limit` 1–100, default 20) → `PaginatedProductSubscriptionsResponse`
+- `GET /v1/product-subscriptions/{subscription_id}` → `ProductSubscription`
+- `DELETE /v1/product-subscriptions/{subscription_id}` → `ProductSubscription` with `status: "cancelled"`
+- Event types: `offer.price.changed` · `offer.availability.changed` · `offer.created` · `offer.deleted`. Payloads and signature verification: [docs.trychannel3.com/product-subscription-webhooks](https://docs.trychannel3.com/product-subscription-webhooks)
+
 ### Price tracking — `/v0/price-tracking/...`
 
-- `POST /start` — body `{ canonical_product_id }` → `Subscription`
-- `POST /stop` — body `{ canonical_product_id }` → `Subscription`
-- `GET /history/{canonical_product_id}?days=` — default 90, max 90 → `PriceHistory`
-- `GET /subscriptions?limit&cursor` → `CursorPage<Subscription>`
-- **SDK:** `client.priceTracking.start | stop | retrieveHistory | listSubscriptions`
+**Deprecated for new integrations** — use `/v1/product-subscriptions` instead. Migrate by cancelling existing tracking (`POST /stop`, SDK `client.priceTracking.stop`; list current ones with `GET /subscriptions`, SDK `client.priceTracking.listSubscriptions`).
+
+Price history remains supported:
+
+- `GET /history/{canonical_product_id}?days=` — default 90, max 90 → `PriceHistory` · SDK: `client.priceTracking.retrieveHistory`
 
 ### Brands and websites
 
 - `GET /v1/brands?limit&cursor` → `CursorPage<Brand>` · SDK: `client.brands.list({...})`
 - `GET /v1/brands/{brand_id}` → `Brand` · SDK: `client.brands.retrieve({ brand_id })`
 - `GET /v1/brands/search?query&limit` → `SearchBrandsResponse` (list, ordered by relevance; `limit` 1–20, default 5) · SDK: `client.brands.search({ query, limit? })`
-- `GET /v0/websites?query=` → `Website | null` · SDK: `client.websites.retrieve({ query })`
+- `GET /v1/websites/search?query&limit&category_ids` → `SearchWebsitesResponse` · SDK: `client.websites.search({ query, limit?, category_ids? })`
+- `GET /v1/websites/{website_id}` (accepts ID or domain) → `Website` · SDK: `client.websites.retrieve({ query })`
+- `GET /v1/websites?category_ids&cursor&limit` (top 5,000) → `PaginatedListWebsitesResponse` · SDK: `client.websites.list({ category_ids? })`
 
 ### Categories — `/v1/categories*`
 
@@ -317,10 +329,20 @@ PriceHistory {
   } | null;
 }
 
-Subscription {
-  canonical_product_id: string;
+ProductSubscription {
+  subscription_id: string;
+  product_id: string;
+  events: Array<"offer.price.changed" | "offer.availability.changed" | "offer.created" | "offer.deleted">;
+  domains?: string[] | null;              // null = every merchant
+  selection?: SelectedOption[] | null;    // pinned variant configuration
+  locale: { language: string; country: string; currency: string };
+  status: "active" | "cancelled";
   created_at: string;                     // ISO 8601
-  subscription_status: "active" | "cancelled";
+}
+
+PaginatedProductSubscriptionsResponse {
+  items: ProductSubscription[];
+  next_cursor?: string | null;            // null when no more results
 }
 
 CategoryRef { slug: string; title: string }
