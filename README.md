@@ -43,7 +43,7 @@ This package is published on npm as `@channel3/skills` and indexed by the [TanSt
 
 ### `channel3-api`
 
-Helps AI assistants write correct integration code for the Channel3 API and SDK 4.0 — product search, similar-products recommendations, multi-merchant offer comparison, URL lookup, conversational shopping agents with streaming and browser-safe client tokens, price tracking, click/transaction reporting, brand/website/category lookups, and affiliate monetization — across TypeScript, Python, and curl.
+Helps AI assistants write correct integration code for the Channel3 API and SDK 4.0 — product search, similar-products recommendations, multi-merchant offer comparison, URL lookup, conversational shopping agents with streaming and browser-safe client tokens, live price and availability webhooks (product subscriptions), price history, click/transaction reporting, brand/website/category lookups, and affiliate monetization — across TypeScript, Python, and curl.
 
 **Triggers automatically when you ask about:**
 - Searching products programmatically across multiple retailers
@@ -52,7 +52,7 @@ Helps AI assistants write correct integration code for the Channel3 API and SDK 
 - Looking up product URLs to get structured data (title, price, images, availability)
 - "More like this" / similar-products recommendations from a product ID
 - Comparing prices and offers across merchants for the same product
-- Cross-retailer price comparison or price drop monitoring
+- Cross-retailer price comparison, price drop monitoring, or back-in-stock alerts
 - Earning affiliate commission on product links, or pulling click/sales attribution reports
 - Visual/image-based product search
 - Migrating existing code to Channel3 SDK 4.0
