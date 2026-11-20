@@ -23,7 +23,7 @@ For locale codes (languages, countries, currencies, units) and inference rules, 
 Free-text and/or image search. At least one of `query`, `image_url`, `base64_image`, or `page_token` is required (422 otherwise).
 
 - **Body:** `query?` · `image_url?` · `base64_image?` · `limit?` (default 20, max 30) · `page_token?` · `filters?: SearchFilters` · `config?: SearchConfig`
-- **Headers:** `x-user-id?` (user attribution — appended to buy URLs)
+- **Headers:** `x-user-id?` (user attribution — appended to buy URLs) · `x-conversation-id?` (strongly recommended for analytics; groups this call with others that send the same id; 1–64 letters, numbers, `_`, `-`)
 - **Response:** `SearchResponse`
 - **SDK:** `client.products.search({...})` → `Page` (`.data` in TS, `.items` in Python)
 
@@ -32,6 +32,7 @@ Free-text and/or image search. At least one of `query`, `image_url`, `base64_ima
 "More like this" from a Channel3 `product_id` you already have. Source product is excluded.
 
 - **Body:** `product_id` (required) · `limit?` · `page_token?` · `filters?: SearchFilters` · `config?: LocaleConfig`
+- **Headers:** `x-user-id?` · `x-conversation-id?` (strongly recommended for analytics)
 - **Response:** `SearchResponse`
 - **Errors:** `404` (product not in catalog yet — fall back to `/v1/search` by title)
 - **SDK:** `client.products.findSimilar({...})` (TS) / `client.products.find_similar({...})` (Python)
@@ -42,7 +43,7 @@ Full canonical product by ID, including hydrated `variants` and `structured_attr
 
 - **Path:** `product_id`
 - **Query:** `website_ids?` (accepts domains, e.g. `nike.com`) · `language?` · `country?` · `currency?` · `length_unit?` · `weight_unit?` · `option_<name>=<label>` (repeatable; selects a variant configuration, e.g. `option_Color=Blue&option_Size=XL`)
-- **Headers:** `x-user-id?`
+- **Headers:** `x-user-id?` · `x-conversation-id?` (strongly recommended for analytics)
 - **Response:** `Product`
 - **SDK:** `client.products.retrieve({ product_id, selected_options?, ... })` (TS) · `client.products.retrieve(product_id, selected_options?, ...)` (Python)
 - **Variant interaction guide:** [`variants.md`](variants.md)
@@ -61,6 +62,7 @@ Resolve a merchant URL to the canonical `Product`. URL-only fallback.
 Filter-only listing — no query, no image. For brand pages, category pages, and retailer collections.
 
 - **Body:** `filters: SearchFilters` (required; **must include at least one of `brand_ids`, `category_ids`, or `website_ids`**) · `limit?` · `page_token?` · `config?: LocaleConfig`
+- **Headers:** `x-user-id?` · `x-conversation-id?` (strongly recommended for analytics)
 - **Response:** `SearchResponse`
 - **Errors:** `422` (missing required filter)
 - **SDK:** `client.products.browse({...})`

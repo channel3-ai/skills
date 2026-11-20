@@ -448,6 +448,32 @@ curl -X POST https://api.trychannel3.com/v1/search \
   -H "Content-Type: application/json" -d '{"query":"desk lamp"}'
 ```
 
+## Conversation grouping
+
+Strongly recommended for analytics. Always send `x-conversation-id` on catalog calls that belong to one shopper conversation — search, browse, image search, similar products, and product detail — and repeat the same value on every call in that conversation. Channel3 groups those calls, and a session is much easier to read when they share the id. This is not the Conversations API `conversation_id` body field — that one continues a hosted agent thread. 1–64 characters: letters, numbers, `_`, and `-`.
+
+```typescript
+await client.products.search({
+  query: 'desk lamp',
+  'x-user-id': 'user_123',
+  'x-conversation-id': 'chat_123',
+});
+```
+
+```python
+client.products.search(
+    query="desk lamp",
+    user_id="user_123",
+    conversation_id="chat_123",
+)
+```
+
+```bash
+curl -X POST https://api.trychannel3.com/v1/search \
+  -H "x-api-key: $CHANNEL3_API_KEY" -H "x-conversation-id: chat_123" \
+  -H "Content-Type: application/json" -d '{"query":"desk lamp"}'
+```
+
 ## Affiliate links
 
 Every `ProductOffer.url` in a response is an affiliate-tracked link. Surface them as the buy buttons in any UI — sales driven through these URLs earn commission with no additional setup. Use `offer.domain` to identify the retailer and `offer.max_commission_rate` to compare earning potential across merchants.
