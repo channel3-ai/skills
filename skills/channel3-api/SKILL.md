@@ -450,7 +450,7 @@ curl -X POST https://api.trychannel3.com/v1/search \
 
 ## Conversation grouping
 
-Send `x-conversation-id` on each catalog call in one shopper conversation so Channel3 can group those calls in analytics. Repeat the same value on search, browse, image search, similar products, and product detail. This is not the Conversations API `conversation_id` body field — that one continues a hosted agent thread. 1–64 characters: letters, numbers, `_`, and `-`.
+Strongly recommended for analytics. Always send `x-conversation-id` on catalog calls that belong to one shopper conversation — search, browse, image search, similar products, and product detail — and repeat the same value on every call in that conversation. Channel3 groups those calls, and a session is much easier to read when they share the id. This is not the Conversations API `conversation_id` body field — that one continues a hosted agent thread. 1–64 characters: letters, numbers, `_`, and `-`.
 
 ```typescript
 await client.products.search(
