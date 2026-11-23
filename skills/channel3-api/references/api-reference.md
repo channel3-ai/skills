@@ -404,8 +404,9 @@ Click {
 }
 
 TransactionsResponse {
-  summary: { total_count: number; total_commission: number };
+  summary: { total_count: number; total_commission: number; total_gmv: number };
                                           // total_commission = vendor net (after Channel3 take rate)
+                                          // total_gmv = summed order_amount, not reduced by commission
   items: Transaction[];
   page: number; limit: number; total_count: number; has_more: boolean;
   start_date: string; end_date: string;
